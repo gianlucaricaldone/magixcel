@@ -1,0 +1,100 @@
+'use client';
+
+import { ReactNode } from 'react';
+import { Filter, FolderOpen, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useUIStore } from '@/stores/ui-store';
+import { cn } from '@/lib/utils';
+
+interface CollapsibleSidebarProps {
+  filterPanel: ReactNode;
+  presetsPanel: ReactNode;
+  analysisPanel: ReactNode;
+}
+
+export function CollapsibleSidebar({
+  filterPanel,
+  presetsPanel,
+  analysisPanel,
+}: CollapsibleSidebarProps) {
+  const { sidebarCollapsed, sidebarActiveTab, toggleSidebar, setSidebarTab } = useUIStore();
+
+  const tabs = [
+    { id: 'filters' as const, label: 'Filters', icon: Filter },
+    { id: 'presets' as const, label: 'Presets', icon: FolderOpen },
+    { id: 'analysis' as const, label: 'Analysis', icon: BarChart3 },
+  ];
+
+  return (
+    <div
+      className={cn(
+        'h-full bg-white border-r border-slate-200 transition-all duration-200 ease-in-out flex flex-col',
+        sidebarCollapsed ? 'w-16' : 'w-80'
+      )}
+    >
+      {/* Tab Headers */}
+      <div className="flex flex-col border-b border-slate-200">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = sidebarActiveTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setSidebarTab(tab.id)}
+              className={cn(
+                'flex items-center gap-3 px-4 h-14 transition-colors relative',
+                isActive
+                  ? 'text-blue-600 bg-blue-50'
+                  : 'text-slate-600 hover:bg-slate-50',
+                sidebarCollapsed && 'justify-center px-0'
+              )}
+            >
+              <Icon className="h-5 w-5 flex-shrink-0" />
+              {!sidebarCollapsed && (
+                <span className="text-sm font-medium">{tab.label}</span>
+              )}
+              {isActive && (
+                <div className="absolute right-0 top-0 bottom-0 w-1 bg-blue-600" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Panel Content */}
+      <div className="flex-1 overflow-hidden">
+        {!sidebarCollapsed && (
+          <>
+            {sidebarActiveTab === 'filters' && (
+              <div className="h-full overflow-y-auto p-4">{filterPanel}</div>
+            )}
+            {sidebarActiveTab === 'presets' && (
+              <div className="h-full overflow-y-auto p-4">{presetsPanel}</div>
+            )}
+            {sidebarActiveTab === 'analysis' && (
+              <div className="h-full overflow-y-auto p-4">{analysisPanel}</div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Collapse Toggle Button */}
+      <div className="border-t border-slate-200 p-2">
+        <button
+          onClick={toggleSidebar}
+          className="w-full flex items-center justify-center h-10 rounded-md hover:bg-slate-100 transition-colors text-slate-600"
+          title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {sidebarCollapsed ? (
+            <ChevronRight className="h-5 w-5" />
+          ) : (
+            <>
+              <ChevronLeft className="h-5 w-5 mr-2" />
+              <span className="text-sm font-medium">Collapse</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}

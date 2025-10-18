@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@14 . --typescript --tailwind --eslint --app --src-dir=false --import-alias=\"@/*\" --use-npm)",
+      "Bash(npm install)",
+      "Bash(npm run type-check)",
+      "Bash(npm run dev)",
+      "Bash(tree app/ -L 3 -I node_modules)",
+      "Bash(npm install @radix-ui/react-dialog)",
+      "Bash(npm install @tanstack/react-virtual)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
