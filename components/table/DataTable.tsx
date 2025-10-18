@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useEffect } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useDataStore } from '@/stores/data-store';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
@@ -18,6 +18,22 @@ export function DataTable({ columns }: DataTableProps) {
   } = useDataStore();
 
   const parentRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  // Sync horizontal scroll between header and body
+  useEffect(() => {
+    const bodyEl = parentRef.current;
+    const headerEl = headerRef.current;
+
+    if (!bodyEl || !headerEl) return;
+
+    const handleScroll = () => {
+      headerEl.scrollLeft = bodyEl.scrollLeft;
+    };
+
+    bodyEl.addEventListener('scroll', handleScroll);
+    return () => bodyEl.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Virtual scrolling setup
   const rowVirtualizer = useVirtualizer({
@@ -68,7 +84,10 @@ export function DataTable({ columns }: DataTableProps) {
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* Sticky Header */}
-      <div className="flex-shrink-0 bg-slate-50 border-b border-slate-200">
+      <div
+        ref={headerRef}
+        className="flex-shrink-0 bg-slate-50 border-b border-slate-200 overflow-x-auto overflow-y-hidden scrollbar-hide"
+      >
         <div className="flex">
           {columns.map((col) => (
             <div
