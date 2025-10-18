@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { applyFilters } from '@/lib/processing/filter-engine';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
+import { exportToCSV, exportToExcel, exportToJSON, getExportFilename } from '@/lib/export/exportData';
 import { IFileMetadata } from '@/types';
 
 export default function SessionPage() {
@@ -183,8 +184,28 @@ export default function SessionPage() {
   };
 
   const handleExport = (format: 'csv' | 'excel' | 'json') => {
-    console.log('Export as:', format);
-    // TODO: Implement export functionality
+    if (!filteredData || filteredData.length === 0) {
+      alert('Nessun dato da esportare');
+      return;
+    }
+
+    // Generate filename with timestamp and filter info
+    const isFiltered = filteredData.length !== data.length;
+    const suffix = isFiltered ? 'filtered' : 'all';
+    const filename = getExportFilename(metadata?.fileName || 'export', suffix);
+
+    // Export based on format
+    switch (format) {
+      case 'csv':
+        exportToCSV(filteredData, filename);
+        break;
+      case 'excel':
+        exportToExcel(filteredData, filename);
+        break;
+      case 'json':
+        exportToJSON(filteredData, filename);
+        break;
+    }
   };
 
   const handleSavePreset = async () => {
