@@ -109,22 +109,22 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
         >
           <CardContent className="p-6">
             {/* Workspace Actions */}
-            {workspace.id !== 'default' && (
-              <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={(e) => {
-                      e.stopPropagation();
-                      handleEditWorkspace(workspace);
-                    }}>
-                      <Pencil className="h-4 w-4 mr-2" />
-                      Edit
-                    </DropdownMenuItem>
+            <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={(e) => {
+                    e.stopPropagation();
+                    handleEditWorkspace(workspace);
+                  }}>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  {workspace.id !== 'default' && (
                     <DropdownMenuItem
                       className="text-red-600"
                       onClick={(e) => {
@@ -135,10 +135,10 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
                       <Trash2 className="h-4 w-4 mr-2" />
                       Delete
                     </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            )}
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             {/* Workspace Icon */}
             <div
