@@ -38,7 +38,7 @@ export default function SessionPage() {
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
   const { data, setData, filteredData, setFilteredData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet, updateSheetFilteredCount } = useDataStore();
-  const { getFilterConfig, filters, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet } = useFilterStore();
+  const { getFilterConfig, filtersBySheet, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet } = useFilterStore();
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -135,7 +135,7 @@ export default function SessionPage() {
     if (activeSheet) {
       updateSheetFilteredCount(activeSheet, filtered.length);
     }
-  }, [debouncedGlobalSearch, data, filters, activeSheet]);
+  }, [debouncedGlobalSearch, data, filtersBySheet, activeSheet, getFilterConfig, setFilteredData, updateSheetFilteredCount]);
 
   const loadSession = async (id: string) => {
     setIsLoadingSession(true);

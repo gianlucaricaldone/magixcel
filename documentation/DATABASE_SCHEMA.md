@@ -5,12 +5,41 @@ MagiXcel uses a database-agnostic architecture with SQLite for development and S
 
 ## Tables
 
+### workspaces
+Stores workspace information for organizing sessions (NotebookLM-style).
+
+```sql
+CREATE TABLE workspaces (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  color TEXT DEFAULT '#3B82F6',
+  icon TEXT DEFAULT 'folder'
+);
+
+CREATE INDEX idx_workspaces_created_at ON workspaces(created_at DESC);
+```
+
+**Fields:**
+- `id`: Unique workspace identifier (nanoid or 'default')
+- `name`: Workspace name
+- `description`: Optional workspace description
+- `created_at`: Workspace creation timestamp
+- `updated_at`: Last modification timestamp
+- `color`: Hex color for visual identification (default: #3B82F6)
+- `icon`: Icon identifier for workspace (default: 'folder')
+
+---
+
 ### sessions
 Stores metadata about uploaded files and user sessions.
 
 ```sql
 CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
   name TEXT NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -19,15 +48,19 @@ CREATE TABLE sessions (
   row_count INTEGER NOT NULL,
   column_count INTEGER NOT NULL,
   file_size INTEGER NOT NULL,
-  file_type TEXT NOT NULL CHECK(file_type IN ('xlsx', 'xls', 'csv'))
+  file_type TEXT NOT NULL CHECK(file_type IN ('xlsx', 'xls', 'csv')),
+  active_filters TEXT,
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_sessions_created_at ON sessions(created_at DESC);
 CREATE INDEX idx_sessions_file_hash ON sessions(original_file_hash);
+CREATE INDEX idx_sessions_workspace_id ON sessions(workspace_id);
 ```
 
 **Fields:**
 - `id`: Unique session identifier (nanoid)
+- `workspace_id`: Reference to parent workspace (foreign key)
 - `name`: User-provided session name
 - `created_at`: Session creation timestamp
 - `updated_at`: Last modification timestamp
@@ -37,6 +70,7 @@ CREATE INDEX idx_sessions_file_hash ON sessions(original_file_hash);
 - `column_count`: Number of columns
 - `file_size`: File size in bytes
 - `file_type`: File format (xlsx, xls, csv)
+- `active_filters`: JSON string containing per-sheet filter state for multi-sheet Excel files
 
 ---
 
@@ -148,10 +182,17 @@ CREATE INDEX idx_cached_results_expires ON cached_results(expires_at);
 ## Relationships
 
 ```
+workspaces (1) ──< (N) sessions
 sessions (1) ──< (N) files
 sessions (1) ──< (N) saved_filters
 sessions (1) ──< (N) cached_results
 ```
+
+**Hierarchy:**
+- A workspace contains multiple sessions (Excel/CSV files)
+- Each session belongs to exactly one workspace
+- When a workspace is deleted, all its sessions are cascade-deleted
+- Sessions contain files, filters, and cached results
 
 ## Migration Strategy
 
@@ -165,9 +206,17 @@ sessions (1) ──< (N) cached_results
 ```
 lib/db/migrations/
 ├── 001_initial_schema.sql
-├── 002_add_caching.sql
-└── 003_add_indexes.sql
+├── 002_add_workspaces.sql  -- Adds workspace support and default workspace
+├── 003_add_caching.sql
+└── 004_add_indexes.sql
 ```
+
+**Migration 002_add_workspaces.sql:**
+- Creates `workspaces` table
+- Adds `workspace_id` column to `sessions` table
+- Creates a 'default' workspace
+- Assigns all existing sessions to the default workspace
+- Adds `active_filters` column for per-sheet filter persistence
 
 ## Cleanup Jobs
 - **Expired Cache**: Delete `cached_results` where `expires_at < NOW()`

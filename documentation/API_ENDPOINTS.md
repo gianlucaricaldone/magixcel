@@ -2,6 +2,125 @@
 
 All API endpoints are located in `app/api/` and follow Next.js 14 App Router conventions.
 
+## Workspaces
+
+### GET /api/workspace
+List all workspaces.
+
+**Query Parameters:**
+- `limit` (optional): Number of workspaces to return (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  workspaces: IWorkspace[];
+  count: number;
+}
+```
+
+### POST /api/workspace
+Create a new workspace.
+
+**Request:**
+```typescript
+{
+  name: string; // Required
+  description?: string;
+  color?: string; // Hex color (default: '#3B82F6')
+  icon?: string; // Icon identifier (default: 'folder')
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  workspace: IWorkspace;
+}
+```
+
+**Errors:**
+- 400: Invalid workspace name (VALIDATION_ERROR)
+- 500: Creation failed (PROCESSING_ERROR)
+
+### GET /api/workspace/:id
+Get a single workspace by ID.
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  workspace: IWorkspace;
+}
+```
+
+**Errors:**
+- 404: Workspace not found (NOT_FOUND)
+- 500: Retrieval failed (PROCESSING_ERROR)
+
+### PUT /api/workspace/:id
+Update a workspace.
+
+**Request:**
+```typescript
+{
+  name?: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+}
+```
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  workspace: IWorkspace;
+}
+```
+
+**Errors:**
+- 404: Workspace not found (NOT_FOUND)
+- 400: Invalid data (VALIDATION_ERROR)
+- 500: Update failed (PROCESSING_ERROR)
+
+### DELETE /api/workspace/:id
+Delete a workspace and all its sessions.
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  message: string;
+}
+```
+
+**Errors:**
+- 400: Cannot delete default workspace (VALIDATION_ERROR)
+- 404: Workspace not found (NOT_FOUND)
+- 500: Deletion failed (PROCESSING_ERROR)
+
+### GET /api/workspace/:id/sessions
+List all sessions in a workspace.
+
+**Query Parameters:**
+- `limit` (optional): Number of sessions to return (default: 50)
+- `offset` (optional): Pagination offset (default: 0)
+
+**Response:**
+```typescript
+{
+  success: boolean;
+  workspace: IWorkspace;
+  sessions: ISession[];
+  count: number;
+}
+```
+
+---
+
 ## Upload
 
 ### POST /api/upload
@@ -14,6 +133,7 @@ Upload and process Excel/CSV files.
   {
     file: File; // Excel or CSV file
     sessionName?: string; // Optional session name
+    workspaceId?: string; // Optional workspace ID (default: 'default')
   }
   ```
 
