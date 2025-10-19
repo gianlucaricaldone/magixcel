@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, FolderOpen, Trash2, Edit2, Check, X, RefreshCw } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Save, FolderOpen, Trash2, Edit2, Check, X, RefreshCw, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,6 +16,7 @@ import { useFilterStore } from '@/stores/filter-store';
 import { IView } from '@/types/database';
 
 export function FilterPresets() {
+  const router = useRouter();
   const {
     views,
     viewsLoading,
@@ -333,6 +335,15 @@ export function FilterPresets() {
                                   className="flex-1 h-8 text-xs"
                                 >
                                   Apply View
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => router.push(`/app/view/${view.id}`)}
+                                  className="h-8 text-xs"
+                                  title="View Dashboard"
+                                >
+                                  <BarChart3 className="h-4 w-4" />
                                 </Button>
                               </div>
                             </>

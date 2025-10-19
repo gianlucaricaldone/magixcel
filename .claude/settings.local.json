@@ -18,7 +18,10 @@
       "Bash(sqlite3 data/magixcel.db \"PRAGMA table_info(sessions);\")",
       "Bash(sqlite3 data/magixcel.db \"SELECT id, name, original_file_name FROM sessions LIMIT 3;\")",
       "Bash(sqlite3 data/magixcel.db \"SELECT name FROM sqlite_master WHERE type=''table'' AND name=''view_charts'';\")",
-      "Bash(npm install chart.js react-chartjs-2 chartjs-plugin-zoom chartjs-plugin-datalabels date-fns)"
+      "Bash(npm install chart.js react-chartjs-2 chartjs-plugin-zoom chartjs-plugin-datalabels date-fns)",
+      "Bash(npm install @radix-ui/react-select @radix-ui/react-checkbox)",
+      "Bash(find app/api/views/[id]/{charts,suggestions} -type f -name \"*.ts\" -exec perl -pi -e 's/viewId/id/g' {} ;)",
+      "Bash(perl -pi -e 's/params\\.viewId/params.id/g; s/viewId as string/id as string/g' app/app/view/[id]/page.tsx)"
     ],
     "deny": [],
     "ask": []

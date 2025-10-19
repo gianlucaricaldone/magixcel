@@ -29,6 +29,7 @@ export interface ChartConfiguration {
   showValues?: boolean;
   enableZoom?: boolean;
   stacked?: boolean;
+  size?: ChartSize;
   options?: any; // Chart.js options
 }
 

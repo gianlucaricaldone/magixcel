@@ -73,6 +73,8 @@ export interface IView {
   updated_at: string;
   last_accessed_at?: string;
   access_count: number;
+  dashboard_layout?: string; // JSON string of DashboardLayout
+  chart_count: number;
 }
 
 // Backward compatibility alias
@@ -120,7 +122,7 @@ export interface IDatabase {
   getViewByName(name: string): Promise<IView | null>;
   getViewByPublicLink(publicLinkId: string): Promise<IView | null>;
   listViews(sessionId?: string, category?: string): Promise<IView[]>;
-  createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView>;
+  createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count' | 'chart_count'>): Promise<IView>;
   updateView(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView>;
   deleteView(id: string): Promise<void>;
   incrementViewAccessCount(id: string): Promise<void>;
@@ -129,7 +131,7 @@ export interface IDatabase {
   getFilterPreset(id: string): Promise<IView | null>;
   getFilterPresetByName(name: string): Promise<IView | null>;
   listFilterPresets(category?: string): Promise<IView[]>;
-  createFilterPreset(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView>;
+  createFilterPreset(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count' | 'chart_count'>): Promise<IView>;
   updateFilterPreset(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView>;
   deleteFilterPreset(id: string): Promise<void>;
 
