@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EditWorkspaceModal } from './EditWorkspaceModal';
 
 interface WorkspaceGridProps {
   onCreateWorkspace: () => void;
@@ -21,6 +22,8 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<IWorkspace[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [workspaceToEdit, setWorkspaceToEdit] = useState<IWorkspace | null>(null);
 
   useEffect(() => {
     loadWorkspaces();
@@ -38,6 +41,11 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleEditWorkspace = (workspace: IWorkspace) => {
+    setWorkspaceToEdit(workspace);
+    setShowEditModal(true);
   };
 
   const handleDeleteWorkspace = async (id: string) => {
@@ -112,7 +120,7 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={(e) => {
                       e.stopPropagation();
-                      // TODO: Implement edit workspace
+                      handleEditWorkspace(workspace);
                     }}>
                       <Pencil className="h-4 w-4 mr-2" />
                       Edit
@@ -162,6 +170,14 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
           </CardContent>
         </Card>
       ))}
+
+      {/* Edit Workspace Modal */}
+      <EditWorkspaceModal
+        workspace={workspaceToEdit}
+        open={showEditModal}
+        onOpenChange={setShowEditModal}
+        onSuccess={loadWorkspaces}
+      />
     </div>
   );
 }
