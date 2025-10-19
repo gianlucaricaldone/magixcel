@@ -56,15 +56,27 @@ export interface ICachedResult {
   expires_at?: string;
 }
 
-export interface IFilterPreset {
+export type ViewType = 'filters_only' | 'snapshot';
+
+export interface IView {
   id: string;
   name: string;
   description?: string;
   category: string;
+  session_id?: string; // Optional: link view to specific session
   filter_config: string; // JSON string of IFilterConfig
+  view_type: ViewType;
+  snapshot_data?: string; // JSON string of data rows (if view_type is 'snapshot')
+  is_public: boolean;
+  public_link_id?: string; // Unique link ID for public sharing
   created_at: string;
   updated_at: string;
+  last_accessed_at?: string;
+  access_count: number;
 }
+
+// Backward compatibility alias
+export type IFilterPreset = IView;
 
 export interface IDatabase {
   // Workspaces
@@ -100,11 +112,21 @@ export interface IDatabase {
   deleteCachedResult(id: string): Promise<void>;
   deleteExpiredCache(): Promise<number>;
 
-  // Filter Presets
-  getFilterPreset(id: string): Promise<IFilterPreset | null>;
-  getFilterPresetByName(name: string): Promise<IFilterPreset | null>;
-  listFilterPresets(category?: string): Promise<IFilterPreset[]>;
-  createFilterPreset(data: Omit<IFilterPreset, 'id' | 'created_at' | 'updated_at'>): Promise<IFilterPreset>;
-  updateFilterPreset(id: string, data: Partial<Omit<IFilterPreset, 'id' | 'created_at'>>): Promise<IFilterPreset>;
+  // Views (formerly Filter Presets)
+  getView(id: string): Promise<IView | null>;
+  getViewByName(name: string): Promise<IView | null>;
+  getViewByPublicLink(publicLinkId: string): Promise<IView | null>;
+  listViews(sessionId?: string, category?: string): Promise<IView[]>;
+  createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView>;
+  updateView(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView>;
+  deleteView(id: string): Promise<void>;
+  incrementViewAccessCount(id: string): Promise<void>;
+
+  // Backward compatibility aliases
+  getFilterPreset(id: string): Promise<IView | null>;
+  getFilterPresetByName(name: string): Promise<IView | null>;
+  listFilterPresets(category?: string): Promise<IView[]>;
+  createFilterPreset(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView>;
+  updateFilterPreset(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView>;
   deleteFilterPreset(id: string): Promise<void>;
 }

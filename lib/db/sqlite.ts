@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
-import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IFilterPreset } from '@/types';
+import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView } from '@/types';
 import fs from 'fs';
 import path from 'path';
 
@@ -303,42 +303,51 @@ export class SQLiteDB implements IDatabase {
     return result.changes;
   }
 
-  // Filter Presets
-  async getFilterPreset(id: string): Promise<IFilterPreset | null> {
-    const stmt = this.db.prepare('SELECT * FROM filter_presets WHERE id = ?');
-    return (stmt.get(id) as IFilterPreset) || null;
+  // Views (formerly Filter Presets)
+  async getView(id: string): Promise<IView | null> {
+    const stmt = this.db.prepare('SELECT * FROM views WHERE id = ?');
+    return (stmt.get(id) as IView) || null;
   }
 
-  async getFilterPresetByName(name: string): Promise<IFilterPreset | null> {
-    const stmt = this.db.prepare('SELECT * FROM filter_presets WHERE name = ?');
-    return (stmt.get(name) as IFilterPreset) || null;
+  async getViewByName(name: string): Promise<IView | null> {
+    const stmt = this.db.prepare('SELECT * FROM views WHERE name = ?');
+    return (stmt.get(name) as IView) || null;
   }
 
-  async listFilterPresets(category?: string): Promise<IFilterPreset[]> {
-    if (category) {
-      const stmt = this.db.prepare(`
-        SELECT * FROM filter_presets
-        WHERE category = ?
-        ORDER BY name ASC
-      `);
-      return stmt.all(category) as IFilterPreset[];
-    } else {
-      const stmt = this.db.prepare(`
-        SELECT * FROM filter_presets
-        ORDER BY category ASC, name ASC
-      `);
-      return stmt.all() as IFilterPreset[];
+  async getViewByPublicLink(publicLinkId: string): Promise<IView | null> {
+    const stmt = this.db.prepare('SELECT * FROM views WHERE public_link_id = ? AND is_public = true');
+    return (stmt.get(publicLinkId) as IView) || null;
+  }
+
+  async listViews(sessionId?: string, category?: string): Promise<IView[]> {
+    let query = 'SELECT * FROM views WHERE 1=1';
+    const params: any[] = [];
+
+    if (sessionId) {
+      query += ' AND (session_id = ? OR session_id IS NULL)';
+      params.push(sessionId);
     }
+
+    if (category) {
+      query += ' AND category = ?';
+      params.push(category);
+    }
+
+    query += ' ORDER BY category ASC, name ASC';
+
+    const stmt = this.db.prepare(query);
+    return stmt.all(...params) as IView[];
   }
 
-  async createFilterPreset(data: Omit<IFilterPreset, 'id' | 'created_at' | 'updated_at'>): Promise<IFilterPreset> {
+  async createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView> {
     const id = nanoid();
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(`
-      INSERT INTO filter_presets (
-        id, name, description, category, filter_config, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO views (
+        id, name, description, category, session_id, filter_config, view_type,
+        snapshot_data, is_public, public_link_id, created_at, updated_at, access_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
     `);
 
     stmt.run(
@@ -346,20 +355,25 @@ export class SQLiteDB implements IDatabase {
       data.name,
       data.description || null,
       data.category,
+      data.session_id || null,
       data.filter_config,
+      data.view_type,
+      data.snapshot_data || null,
+      data.is_public ? 1 : 0,
+      data.public_link_id || null,
       now,
       now
     );
 
-    return this.getFilterPreset(id) as Promise<IFilterPreset>;
+    return this.getView(id) as Promise<IView>;
   }
 
-  async updateFilterPreset(id: string, data: Partial<Omit<IFilterPreset, 'id' | 'created_at'>>): Promise<IFilterPreset> {
+  async updateView(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView> {
     const updates: string[] = [];
     const values: any[] = [];
 
     Object.entries(data).forEach(([key, value]) => {
-      if (key !== 'id' && key !== 'created_at') {
+      if (key !== 'id' && key !== 'created_at' && key !== 'access_count') {
         updates.push(`${key} = ?`);
         values.push(value);
       }
@@ -370,17 +384,52 @@ export class SQLiteDB implements IDatabase {
     values.push(id);
 
     const stmt = this.db.prepare(`
-      UPDATE filter_presets SET ${updates.join(', ')} WHERE id = ?
+      UPDATE views SET ${updates.join(', ')} WHERE id = ?
     `);
 
     stmt.run(...values);
 
-    return this.getFilterPreset(id) as Promise<IFilterPreset>;
+    return this.getView(id) as Promise<IView>;
+  }
+
+  async deleteView(id: string): Promise<void> {
+    const stmt = this.db.prepare('DELETE FROM views WHERE id = ?');
+    stmt.run(id);
+  }
+
+  async incrementViewAccessCount(id: string): Promise<void> {
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare(`
+      UPDATE views
+      SET access_count = access_count + 1, last_accessed_at = ?
+      WHERE id = ?
+    `);
+    stmt.run(now, id);
+  }
+
+  // Backward compatibility aliases
+  async getFilterPreset(id: string): Promise<IView | null> {
+    return this.getView(id);
+  }
+
+  async getFilterPresetByName(name: string): Promise<IView | null> {
+    return this.getViewByName(name);
+  }
+
+  async listFilterPresets(category?: string): Promise<IView[]> {
+    return this.listViews(undefined, category);
+  }
+
+  async createFilterPreset(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView> {
+    return this.createView(data);
+  }
+
+  async updateFilterPreset(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView> {
+    return this.updateView(id, data);
   }
 
   async deleteFilterPreset(id: string): Promise<void> {
-    const stmt = this.db.prepare('DELETE FROM filter_presets WHERE id = ?');
-    stmt.run(id);
+    return this.deleteView(id);
   }
 
   close() {

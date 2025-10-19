@@ -2,33 +2,33 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 
 /**
- * GET /api/filter-presets/[id]
- * Get a specific filter preset by ID
+ * GET /api/views/[id]
+ * Get a specific view by ID
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const preset = await db.getFilterPreset(params.id);
+    const view = await db.getView(params.id);
 
-    if (!preset) {
+    if (!view) {
       return NextResponse.json(
-        { success: false, error: 'Preset not found' },
+        { success: false, error: 'View not found' },
         { status: 404 }
       );
     }
 
     return NextResponse.json({
       success: true,
-      preset,
+      view,
     });
   } catch (error) {
-    console.error('Error fetching filter preset:', error);
+    console.error('Error fetching view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch filter preset',
+        error: error instanceof Error ? error.message : 'Failed to fetch view',
       },
       { status: 500 }
     );
@@ -36,8 +36,8 @@ export async function GET(
 }
 
 /**
- * PUT /api/filter-presets/[id]
- * Update an existing filter preset
+ * PUT /api/views/[id]
+ * Update an existing view
  */
 export async function PUT(
   request: NextRequest,
@@ -45,23 +45,23 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { name, description, category, filterConfig } = body;
+    const { name, description, category, filterConfig, isPublic } = body;
 
-    // Check if preset exists
-    const existing = await db.getFilterPreset(params.id);
+    // Check if view exists
+    const existing = await db.getView(params.id);
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: 'Preset not found' },
+        { success: false, error: 'View not found' },
         { status: 404 }
       );
     }
 
-    // Check if new name conflicts with another preset
+    // Check if new name conflicts with another view
     if (name && name !== existing.name) {
-      const nameConflict = await db.getFilterPresetByName(name);
+      const nameConflict = await db.getViewByName(name);
       if (nameConflict && nameConflict.id !== params.id) {
         return NextResponse.json(
-          { success: false, error: 'A preset with this name already exists' },
+          { success: false, error: 'A view with this name already exists' },
           { status: 409 }
         );
       }
@@ -75,20 +75,23 @@ export async function PUT(
     if (filterConfig !== undefined) {
       updates.filter_config = JSON.stringify(filterConfig);
     }
+    if (isPublic !== undefined) {
+      updates.is_public = isPublic;
+    }
 
-    // Update preset
-    const preset = await db.updateFilterPreset(params.id, updates);
+    // Update view
+    const view = await db.updateView(params.id, updates);
 
     return NextResponse.json({
       success: true,
-      preset,
+      view,
     });
   } catch (error) {
-    console.error('Error updating filter preset:', error);
+    console.error('Error updating view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to update filter preset',
+        error: error instanceof Error ? error.message : 'Failed to update view',
       },
       { status: 500 }
     );
@@ -96,35 +99,35 @@ export async function PUT(
 }
 
 /**
- * DELETE /api/filter-presets/[id]
- * Delete a filter preset
+ * DELETE /api/views/[id]
+ * Delete a view
  */
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    // Check if preset exists
-    const existing = await db.getFilterPreset(params.id);
+    // Check if view exists
+    const existing = await db.getView(params.id);
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: 'Preset not found' },
+        { success: false, error: 'View not found' },
         { status: 404 }
       );
     }
 
-    await db.deleteFilterPreset(params.id);
+    await db.deleteView(params.id);
 
     return NextResponse.json({
       success: true,
-      message: 'Preset deleted successfully',
+      message: 'View deleted successfully',
     });
   } catch (error) {
-    console.error('Error deleting filter preset:', error);
+    console.error('Error deleting view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete filter preset',
+        error: error instanceof Error ? error.message : 'Failed to delete view',
       },
       { status: 500 }
     );

@@ -1,20 +1,18 @@
 'use client';
 
 import { ReactNode, useRef, useState, useEffect } from 'react';
-import { Filter, FolderOpen, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Filter, FolderOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 
 interface CollapsibleSidebarProps {
   filterPanel: ReactNode;
   presetsPanel: ReactNode;
-  analysisPanel: ReactNode;
 }
 
 export function CollapsibleSidebar({
   filterPanel,
   presetsPanel,
-  analysisPanel,
 }: CollapsibleSidebarProps) {
   const { sidebarCollapsed, sidebarActiveTab, sidebarWidth, toggleSidebar, setSidebarTab, setSidebarWidth } = useUIStore();
   const [isResizing, setIsResizing] = useState(false);
@@ -23,7 +21,6 @@ export function CollapsibleSidebar({
   const tabs = [
     { id: 'filters' as const, label: 'Filters', icon: Filter },
     { id: 'presets' as const, label: 'Presets', icon: FolderOpen },
-    { id: 'analysis' as const, label: 'Analysis', icon: BarChart3 },
   ];
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -106,9 +103,6 @@ export function CollapsibleSidebar({
             )}
             {sidebarActiveTab === 'presets' && (
               <div className="h-full overflow-y-auto p-3">{presetsPanel}</div>
-            )}
-            {sidebarActiveTab === 'analysis' && (
-              <div className="h-full overflow-y-auto p-3">{analysisPanel}</div>
             )}
           </>
         )}

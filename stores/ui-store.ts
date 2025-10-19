@@ -6,7 +6,7 @@ import { persist } from 'zustand/middleware';
  * Handles sidebar state, user preferences, and UI settings
  */
 
-type SidebarTab = 'filters' | 'presets' | 'analysis';
+type SidebarTab = 'filters' | 'presets';
 
 interface UIState {
   // Sidebar

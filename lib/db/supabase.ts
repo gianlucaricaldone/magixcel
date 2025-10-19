@@ -1,4 +1,4 @@
-import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IFilterPreset } from '@/types';
+import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView } from '@/types';
 
 /**
  * Supabase implementation (stub for future use)
@@ -106,27 +106,61 @@ export class SupabaseDB implements IDatabase {
     throw new Error('Not implemented');
   }
 
-  async getFilterPreset(id: string): Promise<IFilterPreset | null> {
+  // Views (formerly Filter Presets)
+  async getView(id: string): Promise<IView | null> {
     throw new Error('Not implemented');
   }
 
-  async getFilterPresetByName(name: string): Promise<IFilterPreset | null> {
+  async getViewByName(name: string): Promise<IView | null> {
     throw new Error('Not implemented');
   }
 
-  async listFilterPresets(category?: string): Promise<IFilterPreset[]> {
+  async getViewByPublicLink(publicLinkId: string): Promise<IView | null> {
     throw new Error('Not implemented');
   }
 
-  async createFilterPreset(data: Omit<IFilterPreset, 'id' | 'created_at' | 'updated_at'>): Promise<IFilterPreset> {
+  async listViews(sessionId?: string, category?: string): Promise<IView[]> {
     throw new Error('Not implemented');
   }
 
-  async updateFilterPreset(id: string, data: Partial<Omit<IFilterPreset, 'id' | 'created_at'>>): Promise<IFilterPreset> {
+  async createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView> {
     throw new Error('Not implemented');
+  }
+
+  async updateView(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView> {
+    throw new Error('Not implemented');
+  }
+
+  async deleteView(id: string): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  async incrementViewAccessCount(id: string): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  // Backward compatibility aliases
+  async getFilterPreset(id: string): Promise<IView | null> {
+    return this.getView(id);
+  }
+
+  async getFilterPresetByName(name: string): Promise<IView | null> {
+    return this.getViewByName(name);
+  }
+
+  async listFilterPresets(category?: string): Promise<IView[]> {
+    return this.listViews(undefined, category);
+  }
+
+  async createFilterPreset(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView> {
+    return this.createView(data);
+  }
+
+  async updateFilterPreset(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView> {
+    return this.updateView(id, data);
   }
 
   async deleteFilterPreset(id: string): Promise<void> {
-    throw new Error('Not implemented');
+    return this.deleteView(id);
   }
 }

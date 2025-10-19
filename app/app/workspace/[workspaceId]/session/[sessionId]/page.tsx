@@ -11,7 +11,6 @@ import { TopBar } from '@/components/dashboard/TopBar';
 import { CollapsibleSidebar } from '@/components/dashboard/CollapsibleSidebar';
 import { FilterPanel } from '@/components/dashboard/FilterPanel';
 import { PresetManager } from '@/components/dashboard/PresetManager';
-import { AnalysisPanel } from '@/components/dashboard/AnalysisPanel';
 import { StatusBar } from '@/components/dashboard/StatusBar';
 import { KeyboardShortcutsHelp } from '@/components/dashboard/KeyboardShortcutsHelp';
 import { TableStatsBar } from '@/components/dashboard/TableStatsBar';
@@ -35,6 +34,7 @@ export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
   const sessionId = params.sessionId as string;
+  const workspaceId = params.workspaceId as string;
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
   const { data, setData, filteredData, setFilteredData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet, updateSheetFilteredCount } = useDataStore();
@@ -43,6 +43,8 @@ export default function SessionPage() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
   const debouncedGlobalSearch = useDebounce(globalSearch, 300);
+  const [workspaceName, setWorkspaceName] = useState<string>('');
+  const [sessionName, setSessionName] = useState<string>('');
 
   // Modals state
   const [showFilterBuilder, setShowFilterBuilder] = useState(false);
@@ -142,6 +144,14 @@ export default function SessionPage() {
     setLoading(true);
 
     try {
+      // Load workspace info
+      const workspaceResponse = await fetch(`/api/workspace/${workspaceId}`);
+      const workspaceResult = await workspaceResponse.json();
+
+      if (workspaceResult.success && workspaceResult.workspace) {
+        setWorkspaceName(workspaceResult.workspace.name);
+      }
+
       // Load session metadata
       const metadataResponse = await fetch(`/api/session/${id}`);
       const metadataResult = await metadataResponse.json();
@@ -151,6 +161,9 @@ export default function SessionPage() {
         router.push('/app');
         return;
       }
+
+      // Set session name
+      setSessionName(metadataResult.session.name);
 
       // Load session data
       const dataResponse = await fetch(`/api/session/${id}/data`);
@@ -303,6 +316,9 @@ export default function SessionPage() {
       {/* TopBar - Fixed */}
       <TopBar
         fileName={metadata.fileName}
+        workspaceName={workspaceName}
+        workspaceId={workspaceId}
+        sessionName={sessionName}
         onSearchChange={setGlobalSearch}
         onSave={handleSaveSession}
         onExport={handleExport}
@@ -320,12 +336,6 @@ export default function SessionPage() {
           }
           presetsPanel={
             <PresetManager onSavePreset={() => setShowSavePreset(true)} />
-          }
-          analysisPanel={
-            <AnalysisPanel
-              totalRows={data.length}
-              filteredRows={filteredData.length}
-            />
           }
         />
 

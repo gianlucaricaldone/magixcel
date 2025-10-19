@@ -3,12 +3,12 @@
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { IWorkspace } from '@/types/database';
-import { FileUploader } from '@/components/upload/FileUploader';
+import { CreateSessionModal } from '@/components/upload/CreateSessionModal';
 import { SessionList } from '@/components/upload/SessionList';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FolderOpen, ArrowLeft, Folder } from 'lucide-react';
+import { Upload, FolderOpen, ArrowLeft, Folder, Plus } from 'lucide-react';
 import Link from 'next/link';
 
 export default function WorkspacePage() {
@@ -18,6 +18,7 @@ export default function WorkspacePage() {
 
   const [workspace, setWorkspace] = useState<IWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   useEffect(() => {
     loadWorkspace();
@@ -82,31 +83,17 @@ export default function WorkspacePage() {
         </div>
       </div>
 
-      <Tabs defaultValue="upload" className="space-y-6">
+      <Tabs defaultValue="sessions" className="space-y-6">
         <TabsList className="grid w-full grid-cols-2 lg:w-[300px]">
-          <TabsTrigger value="upload" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            Upload
-          </TabsTrigger>
           <TabsTrigger value="sessions" className="flex items-center gap-2">
             <FolderOpen className="h-4 w-4" />
             Sessions
           </TabsTrigger>
+          <TabsTrigger value="create" className="flex items-center gap-2">
+            <Plus className="h-4 w-4" />
+            New Session
+          </TabsTrigger>
         </TabsList>
-
-        <TabsContent value="upload">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload File</CardTitle>
-              <CardDescription>
-                Upload an Excel or CSV file to this workspace
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <FileUploader workspaceId={workspaceId} />
-            </CardContent>
-          </Card>
-        </TabsContent>
 
         <TabsContent value="sessions">
           <Card>
@@ -121,7 +108,46 @@ export default function WorkspacePage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="create">
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Session</CardTitle>
+              <CardDescription>
+                Start analyzing data by creating a new session
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col items-center justify-center py-12">
+                <div className="mb-6 p-4 bg-blue-50 rounded-full">
+                  <Plus className="h-12 w-12 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-slate-900 mb-2">
+                  Ready to Start?
+                </h3>
+                <p className="text-sm text-slate-600 mb-6 text-center max-w-md">
+                  Choose a data source: upload a new file, use an existing one, or connect from Google Drive
+                </p>
+                <Button
+                  onClick={() => setShowCreateModal(true)}
+                  size="lg"
+                  className="gap-2"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Session
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
+
+      {/* Create Session Modal */}
+      <CreateSessionModal
+        open={showCreateModal}
+        onOpenChange={setShowCreateModal}
+        workspaceId={workspaceId}
+      />
     </div>
   );
 }

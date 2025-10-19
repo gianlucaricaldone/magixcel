@@ -7,6 +7,9 @@ import Link from 'next/link';
 
 interface TopBarProps {
   fileName: string;
+  workspaceName?: string;
+  workspaceId?: string;
+  sessionName?: string;
   onSearchChange: (value: string) => void;
   onSave?: () => void;
   onExport?: (format: 'csv' | 'excel' | 'json') => void;
@@ -15,6 +18,9 @@ interface TopBarProps {
 
 export function TopBar({
   fileName,
+  workspaceName,
+  workspaceId,
+  sessionName,
   onSearchChange,
   onSave,
   onExport,
@@ -35,13 +41,21 @@ export function TopBar({
         <Link href="/app" className="text-blue-600 hover:text-blue-700 font-medium text-sm">
           MagiXcel
         </Link>
+        {workspaceName && workspaceId && (
+          <>
+            <ChevronRight className="h-4 w-4 text-slate-400" />
+            <Link
+              href={`/app/workspace/${workspaceId}`}
+              className="text-slate-600 hover:text-slate-700 text-sm truncate max-w-[150px]"
+              title={workspaceName}
+            >
+              {workspaceName}
+            </Link>
+          </>
+        )}
         <ChevronRight className="h-4 w-4 text-slate-400" />
-        <Link href="/app" className="text-slate-600 hover:text-slate-700 text-sm">
-          My Files
-        </Link>
-        <ChevronRight className="h-4 w-4 text-slate-400" />
-        <span className="text-slate-900 font-medium text-sm truncate max-w-xs" title={fileName}>
-          {fileName}
+        <span className="text-slate-900 font-medium text-sm truncate max-w-xs" title={sessionName || fileName}>
+          {sessionName || fileName}
         </span>
       </div>
 
