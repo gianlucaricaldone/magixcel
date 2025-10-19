@@ -78,6 +78,9 @@ export interface IView {
 // Backward compatibility alias
 export type IFilterPreset = IView;
 
+// Import ViewChart from charts types
+import { ViewChart } from './charts';
+
 export interface IDatabase {
   // Workspaces
   getWorkspace(id: string): Promise<IWorkspace | null>;
@@ -129,4 +132,12 @@ export interface IDatabase {
   createFilterPreset(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView>;
   updateFilterPreset(id: string, data: Partial<Omit<IView, 'id' | 'created_at'>>): Promise<IView>;
   deleteFilterPreset(id: string): Promise<void>;
+
+  // View Charts
+  getViewChart(id: string): Promise<ViewChart | null>;
+  listViewCharts(viewId: string): Promise<ViewChart[]>;
+  createViewChart(data: Omit<ViewChart, 'id' | 'created_at' | 'updated_at'>): Promise<ViewChart>;
+  updateViewChart(id: string, data: Partial<Omit<ViewChart, 'id' | 'created_at'>>): Promise<ViewChart>;
+  deleteViewChart(id: string): Promise<void>;
+  reorderViewCharts(viewId: string, chartIds: string[]): Promise<void>;
 }

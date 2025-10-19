@@ -11,7 +11,14 @@
       "Bash(sqlite3 data/magixcel.db \"SELECT name FROM sqlite_master WHERE type=''table'' AND name=''filter_presets'';\")",
       "Bash(sqlite3 data/magixcel.db \"PRAGMA table_info(views);\")",
       "Bash(sqlite3 data/magixcel.db \"CREATE UNIQUE INDEX IF NOT EXISTS idx_views_public_link_id ON views(public_link_id) WHERE public_link_id IS NOT NULL;\")",
-      "Bash(sqlite3 data/magixcel.db \"SELECT COUNT(*) as count FROM views; SELECT * FROM views LIMIT 3;\")"
+      "Bash(sqlite3 data/magixcel.db \"SELECT COUNT(*) as count FROM views; SELECT * FROM views LIMIT 3;\")",
+      "Bash(perl -pi -e 's/IFilterPreset/IView/g; s/(?<![a-zA-Z])presets(?=,)/views/g; s/presetsLoading/viewsLoading/g; s/loadPresets/loadViews/g; s/savePreset/saveView/g; s/loadPreset/loadView/g; s/updatePreset/updateView/g; s/deletePreset/deleteView/g; s/categoryPresets/categoryViews/g; s/presetsByCategory/viewsByCategory/g' components/filters/FilterPresets.tsx)",
+      "Bash(sqlite3 data/magixcel.db \"SELECT COUNT(*) as total_views, COUNT(CASE WHEN is_public = 1 THEN 1 END) as public_views FROM views;\")",
+      "Bash(sqlite3 data/magixcel.db \"SELECT id, original_filename FROM sessions LIMIT 3;\")",
+      "Bash(sqlite3 data/magixcel.db \"PRAGMA table_info(sessions);\")",
+      "Bash(sqlite3 data/magixcel.db \"SELECT id, name, original_file_name FROM sessions LIMIT 3;\")",
+      "Bash(sqlite3 data/magixcel.db \"SELECT name FROM sqlite_master WHERE type=''table'' AND name=''view_charts'';\")",
+      "Bash(npm install chart.js react-chartjs-2 chartjs-plugin-zoom chartjs-plugin-datalabels date-fns)"
     ],
     "deny": [],
     "ask": []

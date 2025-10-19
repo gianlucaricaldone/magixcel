@@ -38,7 +38,7 @@ export default function SessionPage() {
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
   const { data, setData, filteredData, setFilteredData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet, updateSheetFilteredCount } = useDataStore();
-  const { getFilterConfig, filtersBySheet, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet } = useFilterStore();
+  const { getFilterConfig, filtersBySheet, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet, saveView, loadViews } = useFilterStore();
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -84,7 +84,7 @@ export default function SessionPage() {
         e.preventDefault();
         setShowSavePreset(true);
       },
-      description: 'Save preset',
+      description: 'Save view',
     },
     {
       key: 'Escape',
@@ -264,9 +264,28 @@ export default function SessionPage() {
   };
 
   const handleSavePreset = async () => {
-    // TODO: Implement save preset
-    console.log('Save preset:', { presetName, presetDescription, presetCategory });
-    setShowSavePreset(false);
+    if (!presetName.trim()) {
+      alert('Please enter a name for the view');
+      return;
+    }
+
+    const result = await saveView(presetName, {
+      description: presetDescription,
+      category: presetCategory,
+    });
+
+    if (result.success) {
+      // Reset form and close dialog
+      setPresetName('');
+      setPresetDescription('');
+      setPresetCategory('Custom');
+      setShowSavePreset(false);
+
+      // Reload views to update the list
+      await loadViews();
+    } else {
+      alert(result.error || 'Failed to save view');
+    }
   };
 
   const handleSaveSession = async () => {
@@ -388,13 +407,13 @@ export default function SessionPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Save Preset Modal */}
+      {/* Save View Modal */}
       <Dialog open={showSavePreset} onOpenChange={setShowSavePreset}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Save Filter Preset</DialogTitle>
+            <DialogTitle>Save Filter View</DialogTitle>
             <DialogDescription>
-              Save current filters as a reusable preset
+              Save current filters as a reusable view
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -433,7 +452,7 @@ export default function SessionPage() {
             <Button variant="outline" onClick={() => setShowSavePreset(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSavePreset}>Save Preset</Button>
+            <Button onClick={handleSavePreset}>Save View</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

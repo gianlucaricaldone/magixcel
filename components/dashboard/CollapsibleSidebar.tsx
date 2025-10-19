@@ -20,7 +20,7 @@ export function CollapsibleSidebar({
 
   const tabs = [
     { id: 'filters' as const, label: 'Filters', icon: Filter },
-    { id: 'presets' as const, label: 'Presets', icon: FolderOpen },
+    { id: 'presets' as const, label: 'Views', icon: FolderOpen },
   ];
 
   const handleMouseDown = (e: React.MouseEvent) => {

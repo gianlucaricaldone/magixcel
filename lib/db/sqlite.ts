@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView } from '@/types';
+import { ViewChart } from '@/types/charts';
 import fs from 'fs';
 import path from 'path';
 
@@ -430,6 +431,105 @@ export class SQLiteDB implements IDatabase {
 
   async deleteFilterPreset(id: string): Promise<void> {
     return this.deleteView(id);
+  }
+
+  // View Charts
+  async getViewChart(id: string): Promise<ViewChart | null> {
+    const stmt = this.db.prepare('SELECT * FROM view_charts WHERE id = ?');
+    return (stmt.get(id) as ViewChart) || null;
+  }
+
+  async listViewCharts(viewId: string): Promise<ViewChart[]> {
+    const stmt = this.db.prepare('SELECT * FROM view_charts WHERE view_id = ? ORDER BY position ASC');
+    return stmt.all(viewId) as ViewChart[];
+  }
+
+  async createViewChart(data: Omit<ViewChart, 'id' | 'created_at' | 'updated_at'>): Promise<ViewChart> {
+    const id = nanoid();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO view_charts (
+        id, view_id, chart_type, title, config, position, size, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.view_id,
+      data.chart_type,
+      data.title,
+      data.config,
+      data.position,
+      data.size || 'medium',
+      now,
+      now
+    );
+
+    // Update view chart_count
+    const updateViewStmt = this.db.prepare('UPDATE views SET chart_count = chart_count + 1 WHERE id = ?');
+    updateViewStmt.run(data.view_id);
+
+    return this.getViewChart(id) as Promise<ViewChart>;
+  }
+
+  async updateViewChart(id: string, data: Partial<Omit<ViewChart, 'id' | 'created_at'>>): Promise<ViewChart> {
+    const now = new Date().toISOString();
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (data.title !== undefined) {
+      updates.push('title = ?');
+      values.push(data.title);
+    }
+    if (data.config !== undefined) {
+      updates.push('config = ?');
+      values.push(data.config);
+    }
+    if (data.position !== undefined) {
+      updates.push('position = ?');
+      values.push(data.position);
+    }
+    if (data.size !== undefined) {
+      updates.push('size = ?');
+      values.push(data.size);
+    }
+
+    updates.push('updated_at = ?');
+    values.push(now);
+
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE view_charts
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `);
+
+    stmt.run(...values);
+
+    return this.getViewChart(id) as Promise<ViewChart>;
+  }
+
+  async deleteViewChart(id: string): Promise<void> {
+    // Get view_id before deleting
+    const chart = await this.getViewChart(id);
+    if (chart) {
+      const stmt = this.db.prepare('DELETE FROM view_charts WHERE id = ?');
+      stmt.run(id);
+
+      // Update view chart_count
+      const updateViewStmt = this.db.prepare('UPDATE views SET chart_count = chart_count - 1 WHERE id = ?');
+      updateViewStmt.run(chart.view_id);
+    }
+  }
+
+  async reorderViewCharts(viewId: string, chartIds: string[]): Promise<void> {
+    const stmt = this.db.prepare('UPDATE view_charts SET position = ? WHERE id = ?');
+
+    chartIds.forEach((chartId, index) => {
+      stmt.run(index, chartId);
+    });
   }
 
   close() {

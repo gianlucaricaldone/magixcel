@@ -4,23 +4,24 @@ import { useState, useEffect } from 'react';
 import { Save, FolderOpen, RefreshCw, Trash2, ChevronDown, ChevronRight, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFilterStore } from '@/stores/filter-store';
-import { IFilterPreset } from '@/types/database';
+import { IView } from '@/types/database';
 
 interface PresetManagerProps {
   onSavePreset: () => void;
 }
 
 export function PresetManager({ onSavePreset }: PresetManagerProps) {
-  const { presets, presetsLoading, loadPresets, loadPreset, updatePreset, deletePreset, getFilterConfig, filters } =
+  const { views, viewsLoading, loadViews, loadView, updateView, deleteView, getFilterConfig } =
     useFilterStore();
 
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(['Custom']));
 
-  // Check if there are active filters
-  const hasActiveFilters = filters.length > 0;
+  // Check if there are active filters (works for both single and multi-sheet files)
+  const currentFilterConfig = getFilterConfig();
+  const hasActiveFilters = currentFilterConfig.filters.length > 0;
 
   useEffect(() => {
-    loadPresets();
+    loadViews();
   }, []);
 
   const toggleCategory = (category: string) => {
@@ -33,51 +34,51 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
     setExpandedCategories(newExpanded);
   };
 
-  const handleUpdateFilters = async (preset: IFilterPreset) => {
-    if (confirm(`Update "${preset.name}" with current filters?`)) {
+  const handleUpdateFilters = async (view: IView) => {
+    if (confirm(`Update "${view.name}" with current filters?`)) {
       const currentFilters = getFilterConfig();
-      await updatePreset(preset.id, {
+      await updateView(view.id, {
         filterConfig: currentFilters,
       });
     }
   };
 
-  const handleDeletePreset = async (preset: IFilterPreset) => {
-    if (confirm(`Delete preset "${preset.name}"?`)) {
-      await deletePreset(preset.id);
+  const handleDeleteView = async (view: IView) => {
+    if (confirm(`Delete view "${view.name}"?`)) {
+      await deleteView(view.id);
     }
   };
 
-  // Group presets by category
-  const presetsByCategory = presets.reduce((acc, preset) => {
-    const cat = preset.category || 'Custom';
+  // Group views by category
+  const viewsByCategory = views.reduce((acc: Record<string, IView[]>, view: IView) => {
+    const cat = view.category || 'Custom';
     if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(preset);
+    acc[cat].push(view);
     return acc;
-  }, {} as Record<string, IFilterPreset[]>);
+  }, {} as Record<string, IView[]>);
 
-  const totalPresets = presets.length;
+  const totalViews = views.length;
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-slate-900">
-          Presets {totalPresets > 0 && `(${totalPresets})`}
+          Views {totalViews > 0 && `(${totalViews})`}
         </h3>
       </div>
 
-      {/* Info Box - How to create presets */}
-      {totalPresets === 0 && !hasActiveFilters && (
+      {/* Info Box - How to create views */}
+      {totalViews === 0 && !hasActiveFilters && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-amber-800">
-              <p className="font-semibold mb-1">Come creare un preset:</p>
+              <p className="font-semibold mb-1">How to create a view:</p>
               <ol className="list-decimal list-inside space-y-0.5 text-amber-700">
-                <li>Vai al tab <strong>Filtri</strong></li>
-                <li>Aggiungi uno o più filtri</li>
-                <li>Torna qui e clicca <strong>Save Current</strong></li>
+                <li>Go to the <strong>Filters</strong> tab</li>
+                <li>Add one or more filters</li>
+                <li>Come back here and click <strong>Save Current</strong></li>
               </ol>
             </div>
           </div>
@@ -98,28 +99,28 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
         </Button>
         {hasActiveFilters && (
           <p className="text-xs text-green-600 text-center font-medium">
-            ✓ {filters.length} filtro{filters.length !== 1 ? 'i' : ''} attivo{filters.length !== 1 ? 'i' : ''} pronto{filters.length !== 1 ? 'i' : ''} da salvare
+            ✓ {currentFilterConfig.filters.length} active filter{currentFilterConfig.filters.length !== 1 ? 's' : ''} ready to save
           </p>
         )}
       </div>
 
-      {/* Presets Tree */}
-      {presetsLoading ? (
+      {/* Views Tree */}
+      {viewsLoading ? (
         <div className="py-8 text-center">
           <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-solid border-blue-600 border-r-transparent" />
-          <p className="text-xs text-slate-600 mt-2">Loading presets...</p>
+          <p className="text-xs text-slate-600 mt-2">Loading views...</p>
         </div>
-      ) : totalPresets === 0 ? (
+      ) : totalViews === 0 ? (
         <div className="py-8 text-center">
           <div className="h-12 w-12 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center">
             <FolderOpen className="h-6 w-6 text-slate-400" />
           </div>
-          <p className="text-sm text-slate-600 mb-1 font-medium">Nessun preset salvato</p>
-          <p className="text-xs text-slate-500">I tuoi preset appariranno qui dopo il salvataggio</p>
+          <p className="text-sm text-slate-600 mb-1 font-medium">No saved views</p>
+          <p className="text-xs text-slate-500">Your views will appear here after saving</p>
         </div>
       ) : (
         <div className="space-y-1">
-          {Object.entries(presetsByCategory).map(([category, categoryPresets]) => {
+          {Object.entries(viewsByCategory).map(([category, categoryViews]) => {
             const isExpanded = expandedCategories.has(category);
 
             return (
@@ -136,28 +137,28 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
                   )}
                   <FolderOpen className="h-4 w-4 text-blue-600" />
                   <span className="text-sm font-medium text-slate-700 flex-1">{category}</span>
-                  <span className="text-xs text-slate-500">{categoryPresets.length}</span>
+                  <span className="text-xs text-slate-500">{categoryViews.length}</span>
                 </button>
 
-                {/* Category Presets */}
+                {/* Category Views */}
                 {isExpanded && (
                   <div className="ml-6 space-y-1">
-                    {categoryPresets.map((preset) => (
+                    {categoryViews.map((view) => (
                       <div
-                        key={preset.id}
+                        key={view.id}
                         className="group p-2 rounded-md hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-all"
                       >
-                        {/* Preset Name & Description */}
+                        {/* View Name & Description */}
                         <div
                           className="cursor-pointer mb-2"
-                          onClick={() => loadPreset(preset.id)}
+                          onClick={() => loadView(view.id)}
                         >
                           <div className="text-sm font-medium text-slate-900 group-hover:text-blue-700">
-                            {preset.name}
+                            {view.name}
                           </div>
-                          {preset.description && (
+                          {view.description && (
                             <div className="text-xs text-slate-600 mt-0.5 truncate">
-                              {preset.description}
+                              {view.description}
                             </div>
                           )}
                         </div>
@@ -165,7 +166,7 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
                         {/* Quick Actions */}
                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <button
-                            onClick={() => handleUpdateFilters(preset)}
+                            onClick={() => handleUpdateFilters(view)}
                             className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-white hover:bg-green-50 text-green-700 rounded border border-green-200"
                             title="Update with current filters"
                           >
@@ -173,9 +174,9 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
                             Update
                           </button>
                           <button
-                            onClick={() => handleDeletePreset(preset)}
+                            onClick={() => handleDeleteView(view)}
                             className="flex-1 flex items-center justify-center gap-1 px-2 py-1 text-xs bg-white hover:bg-red-50 text-red-700 rounded border border-red-200"
-                            title="Delete preset"
+                            title="Delete view"
                           >
                             <Trash2 className="h-3 w-3" />
                             Delete
@@ -192,10 +193,10 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
       )}
 
       {/* Info */}
-      {totalPresets > 0 && (
+      {totalViews > 0 && (
         <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
           <p className="text-xs text-blue-800">
-            <strong>💡 Suggerimento:</strong> Clicca sul nome di un preset per applicarlo istantaneamente.
+            <strong>💡 Tip:</strong> Click on a view name to apply it instantly.
           </p>
         </div>
       )}

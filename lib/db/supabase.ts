@@ -1,4 +1,5 @@
 import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView } from '@/types';
+import { ViewChart } from '@/types/charts';
 
 /**
  * Supabase implementation (stub for future use)
@@ -162,5 +163,30 @@ export class SupabaseDB implements IDatabase {
 
   async deleteFilterPreset(id: string): Promise<void> {
     return this.deleteView(id);
+  }
+
+  // View Charts
+  async getViewChart(id: string): Promise<ViewChart | null> {
+    throw new Error('Not implemented');
+  }
+
+  async listViewCharts(viewId: string): Promise<ViewChart[]> {
+    throw new Error('Not implemented');
+  }
+
+  async createViewChart(data: Omit<ViewChart, 'id' | 'created_at' | 'updated_at'>): Promise<ViewChart> {
+    throw new Error('Not implemented');
+  }
+
+  async updateViewChart(id: string, data: Partial<Omit<ViewChart, 'id' | 'created_at'>>): Promise<ViewChart> {
+    throw new Error('Not implemented');
+  }
+
+  async deleteViewChart(id: string): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  async reorderViewCharts(viewId: string, chartIds: string[]): Promise<void> {
+    throw new Error('Not implemented');
   }
 }

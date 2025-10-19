@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { IFilter, IFilterGroup, IFilterConfig, FilterCombinator } from '@/types';
-import { IFilterPreset } from '@/types/database';
+import { IView, ViewType } from '@/types/database';
 import { nanoid } from 'nanoid';
 
 /**
@@ -22,8 +22,9 @@ interface FilterState {
   combinator: FilterCombinator;
 
   activeFilterHash: string | null;
-  presets: IFilterPreset[];
-  presetsLoading: boolean;
+  views: IView[];
+  viewsLoading: boolean;
+  currentViewId: string | null;
 
   // Filter Actions
   addFilter: (filter: Omit<IFilter, 'id'>, groupId?: string) => void;
@@ -39,9 +40,28 @@ interface FilterState {
   restoreFiltersBySheet: (filtersBySheet: Record<string, SheetFilters>) => void;
   getFilterConfig: () => IFilterConfig;
 
-  // Preset Actions
+  // View Actions
+  loadViews: (sessionId?: string) => Promise<void>;
+  saveView: (
+    name: string,
+    options?: {
+      description?: string;
+      category?: string;
+      viewType?: ViewType;
+      isPublic?: boolean;
+      bindToSession?: boolean;
+      sessionId?: string;
+      snapshotData?: any[];
+    }
+  ) => Promise<{ success: boolean; error?: string; view?: IView; publicLink?: string }>;
+  loadView: (id: string) => Promise<void>;
+  updateView: (id: string, updates: { name?: string; description?: string; category?: string; filterConfig?: IFilterConfig; isPublic?: boolean }) => Promise<{ success: boolean; error?: string }>;
+  deleteView: (id: string) => Promise<void>;
+  shareView: (id: string) => Promise<string | null>;
+
+  // Backward compatibility aliases
   loadPresets: () => Promise<void>;
-  savePreset: (name: string, description?: string, category?: string) => Promise<{ success: boolean; error?: string; preset?: IFilterPreset }>;
+  savePreset: (name: string, description?: string, category?: string) => Promise<{ success: boolean; error?: string; preset?: IView }>;
   loadPreset: (id: string) => Promise<void>;
   updatePreset: (id: string, updates: { name?: string; description?: string; category?: string; filterConfig?: IFilterConfig }) => Promise<{ success: boolean; error?: string }>;
   deletePreset: (id: string) => Promise<void>;
@@ -53,8 +73,9 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   filters: [],
   combinator: 'AND',
   activeFilterHash: null,
-  presets: [],
-  presetsLoading: false,
+  views: [],
+  viewsLoading: false,
+  currentViewId: null,
 
   addFilter: (filter, groupId) => {
     const newFilter: IFilter = { ...filter, id: nanoid() };
@@ -286,66 +307,77 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     };
   },
 
-  // Preset Actions
-  loadPresets: async () => {
-    set({ presetsLoading: true });
+  // View Actions
+  loadViews: async (sessionId) => {
+    set({ viewsLoading: true });
     try {
-      const response = await fetch('/api/filter-presets');
+      const url = sessionId ? `/api/views?sessionId=${sessionId}` : '/api/views';
+      const response = await fetch(url);
       const result = await response.json();
       if (result.success) {
-        set({ presets: result.presets, presetsLoading: false });
+        set({ views: result.views, viewsLoading: false });
       } else {
-        console.error('Failed to load presets:', result.error);
-        set({ presetsLoading: false });
+        console.error('Failed to load views:', result.error);
+        set({ viewsLoading: false });
       }
     } catch (error) {
-      console.error('Error loading presets:', error);
-      set({ presetsLoading: false });
+      console.error('Error loading views:', error);
+      set({ viewsLoading: false });
     }
   },
 
-  savePreset: async (name, description = '', category = 'Custom') => {
+  saveView: async (name, options = {}) => {
     const state = get();
     const filterConfig = state.getFilterConfig();
 
     try {
-      const response = await fetch('/api/filter-presets', {
+      const response = await fetch('/api/views', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          description,
-          category,
+          description: options.description || '',
+          category: options.category || 'Custom',
           filterConfig,
+          viewType: options.viewType || 'filters_only',
+          snapshotData: options.snapshotData,
+          isPublic: options.isPublic || false,
+          bindToSession: options.bindToSession || false,
+          sessionId: options.sessionId,
         }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        // Reload presets to get updated list
-        await get().loadPresets();
-        return { success: true, preset: result.preset };
+        // Reload views to get updated list
+        await get().loadViews(options.sessionId);
+        set({ currentViewId: result.view.id });
+        return {
+          success: true,
+          view: result.view,
+          publicLink: result.publicLink
+        };
       } else {
         return { success: false, error: result.error };
       }
     } catch (error) {
-      console.error('Error saving preset:', error);
-      return { success: false, error: 'Failed to save preset' };
+      console.error('Error saving view:', error);
+      return { success: false, error: 'Failed to save view' };
     }
   },
 
-  loadPreset: async (id) => {
+  loadView: async (id) => {
     try {
-      const response = await fetch(`/api/filter-presets/${id}`);
+      const response = await fetch(`/api/views/${id}`);
       const result = await response.json();
 
       if (result.success) {
-        const config: IFilterConfig = JSON.parse(result.preset.filter_config);
+        const config: IFilterConfig = JSON.parse(result.view.filter_config);
         const state = get();
 
         if (state.activeSheet) {
-          // Load preset to active sheet
+          // Load view to active sheet
           set((state) => ({
             filtersBySheet: {
               ...state.filtersBySheet,
@@ -354,31 +386,34 @@ export const useFilterStore = create<FilterState>((set, get) => ({
                 combinator: config.combinator,
               },
             },
+            currentViewId: id,
           }));
         } else {
           // Legacy single filters
           set({
             filters: config.filters,
             combinator: config.combinator,
+            currentViewId: id,
           });
         }
       } else {
-        console.error('Failed to load preset:', result.error);
+        console.error('Failed to load view:', result.error);
       }
     } catch (error) {
-      console.error('Error loading preset:', error);
+      console.error('Error loading view:', error);
     }
   },
 
-  updatePreset: async (id, updates) => {
+  updateView: async (id, updates) => {
     try {
       const body: any = {};
       if (updates.name !== undefined) body.name = updates.name;
       if (updates.description !== undefined) body.description = updates.description;
       if (updates.category !== undefined) body.category = updates.category;
       if (updates.filterConfig !== undefined) body.filterConfig = updates.filterConfig;
+      if (updates.isPublic !== undefined) body.isPublic = updates.isPublic;
 
-      const response = await fetch(`/api/filter-presets/${id}`, {
+      const response = await fetch(`/api/views/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -387,36 +422,82 @@ export const useFilterStore = create<FilterState>((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
-        // Reload presets to get updated list
-        await get().loadPresets();
+        // Reload views to get updated list
+        await get().loadViews();
         return { success: true };
       } else {
         return { success: false, error: result.error };
       }
     } catch (error) {
-      console.error('Error updating preset:', error);
-      return { success: false, error: 'Failed to update preset' };
+      console.error('Error updating view:', error);
+      return { success: false, error: 'Failed to update view' };
     }
   },
 
-  deletePreset: async (id) => {
+  deleteView: async (id) => {
     try {
-      const response = await fetch(`/api/filter-presets/${id}`, {
+      const response = await fetch(`/api/views/${id}`, {
         method: 'DELETE',
       });
 
       const result = await response.json();
 
       if (result.success) {
-        // Reload presets to get updated list
-        await get().loadPresets();
+        // Reload views to get updated list
+        await get().loadViews();
+        // Clear current view if it was the deleted one
+        const state = get();
+        if (state.currentViewId === id) {
+          set({ currentViewId: null });
+        }
       } else {
-        console.error('Failed to delete preset:', result.error);
+        console.error('Failed to delete view:', result.error);
       }
     } catch (error) {
-      console.error('Error deleting preset:', error);
+      console.error('Error deleting view:', error);
     }
   },
+
+  shareView: async (id) => {
+    try {
+      // Get view to check if it's already public
+      const response = await fetch(`/api/views/${id}`);
+      const result = await response.json();
+
+      if (result.success && result.view) {
+        if (result.view.is_public && result.view.public_link_id) {
+          return `/public/view/${result.view.public_link_id}`;
+        } else {
+          // Make view public if not already
+          const updateResponse = await fetch(`/api/views/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isPublic: true }),
+          });
+
+          const updateResult = await updateResponse.json();
+          if (updateResult.success && updateResult.view.public_link_id) {
+            await get().loadViews();
+            return `/public/view/${updateResult.view.public_link_id}`;
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error sharing view:', error);
+      return null;
+    }
+  },
+
+  // Backward compatibility aliases
+  loadPresets: async () => get().loadViews(),
+  savePreset: async (name, description, category) => {
+    const result = await get().saveView(name, { description, category });
+    return { success: result.success, error: result.error, preset: result.view };
+  },
+  loadPreset: async (id) => get().loadView(id),
+  updatePreset: async (id, updates) => get().updateView(id, updates),
+  deletePreset: async (id) => get().deleteView(id),
 }));
 
 // Helper functions
