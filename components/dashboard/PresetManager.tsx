@@ -68,14 +68,14 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
       </div>
 
       {/* Info Box - How to create presets */}
-      {!hasActiveFilters && (
+      {totalPresets === 0 && !hasActiveFilters && (
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
           <div className="flex items-start gap-2">
             <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
             <div className="text-xs text-amber-800">
               <p className="font-semibold mb-1">Come creare un preset:</p>
               <ol className="list-decimal list-inside space-y-0.5 text-amber-700">
-                <li>Vai al tab <strong>Filters</strong></li>
+                <li>Vai al tab <strong>Filtri</strong></li>
                 <li>Aggiungi uno o più filtri</li>
                 <li>Torna qui e clicca <strong>Save Current</strong></li>
               </ol>
