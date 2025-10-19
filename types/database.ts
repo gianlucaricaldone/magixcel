@@ -13,6 +13,7 @@ export interface ISession {
   column_count: number;
   file_size: number;
   file_type: 'xlsx' | 'xls' | 'csv';
+  active_filters?: string; // JSON string containing filtersBySheet state
 }
 
 export interface IFile {

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { ISheetData } from '@/lib/processing/excel-processor';
 
 /**
  * Data state management
@@ -17,6 +18,10 @@ interface DataState {
   sortColumn: string | null;
   sortDirection: SortDirection;
 
+  // Multi-sheet support
+  sheets: ISheetData[];
+  activeSheet: string | null;
+
   // Actions
   setData: (data: any[]) => void;
   setFilteredData: (filteredData: any[]) => void;
@@ -24,11 +29,15 @@ interface DataState {
   setPageSize: (pageSize: number) => void;
   setIsFiltering: (isFiltering: boolean) => void;
   setSorting: (column: string | null, direction: SortDirection) => void;
+  setSheets: (sheets: ISheetData[]) => void;
+  setActiveSheet: (sheetName: string) => void;
+  updateSheetFilteredCount: (sheetName: string, filteredCount: number) => void;
   clearData: () => void;
 
   // Computed
   getPaginatedData: () => any[];
   getTotalPages: () => number;
+  getActiveSheetData: () => ISheetData | null;
 }
 
 export const useDataStore = create<DataState>((set, get) => ({
@@ -41,6 +50,8 @@ export const useDataStore = create<DataState>((set, get) => ({
   isFiltering: false,
   sortColumn: null,
   sortDirection: null,
+  sheets: [],
+  activeSheet: null,
 
   setData: (data) =>
     set({
@@ -97,6 +108,53 @@ export const useDataStore = create<DataState>((set, get) => ({
     });
   },
 
+  setSheets: (sheets) => {
+    const firstSheet = sheets[0];
+    if (firstSheet) {
+      set({
+        sheets,
+        activeSheet: firstSheet.sheetName,
+        data: firstSheet.data,
+        filteredData: firstSheet.data,
+        totalRows: firstSheet.data.length,
+        filteredRows: firstSheet.data.length,
+        currentPage: 1,
+        sortColumn: null,
+        sortDirection: null,
+      });
+    } else {
+      set({ sheets, activeSheet: null });
+    }
+  },
+
+  setActiveSheet: (sheetName) => {
+    const state = get();
+    const sheet = state.sheets.find((s) => s.sheetName === sheetName);
+
+    if (sheet) {
+      set({
+        activeSheet: sheetName,
+        data: sheet.data,
+        filteredData: sheet.data,
+        totalRows: sheet.data.length,
+        filteredRows: sheet.filteredRowCount ?? sheet.data.length,
+        currentPage: 1,
+        sortColumn: null,
+        sortDirection: null,
+      });
+    }
+  },
+
+  updateSheetFilteredCount: (sheetName, filteredCount) => {
+    const state = get();
+    const updatedSheets = state.sheets.map((sheet) =>
+      sheet.sheetName === sheetName
+        ? { ...sheet, filteredRowCount: filteredCount }
+        : sheet
+    );
+    set({ sheets: updatedSheets });
+  },
+
   clearData: () =>
     set({
       data: [],
@@ -107,6 +165,8 @@ export const useDataStore = create<DataState>((set, get) => ({
       isFiltering: false,
       sortColumn: null,
       sortDirection: null,
+      sheets: [],
+      activeSheet: null,
     }),
 
   getPaginatedData: () => {
@@ -119,5 +179,11 @@ export const useDataStore = create<DataState>((set, get) => ({
   getTotalPages: () => {
     const state = get();
     return Math.ceil(state.filteredRows / state.pageSize);
+  },
+
+  getActiveSheetData: () => {
+    const state = get();
+    if (!state.activeSheet) return null;
+    return state.sheets.find((s) => s.sheetName === state.activeSheet) || null;
   },
 }));

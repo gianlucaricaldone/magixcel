@@ -1,24 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Download, Share2, Settings, ChevronRight, Zap, ZapOff } from 'lucide-react';
+import { Search, Download, Share2, Settings, ChevronRight, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 interface TopBarProps {
   fileName: string;
-  liveFiltering: boolean;
   onSearchChange: (value: string) => void;
-  onToggleLive: () => void;
+  onSave?: () => void;
   onExport?: (format: 'csv' | 'excel' | 'json') => void;
   searchInputRef?: React.RefObject<HTMLInputElement>;
 }
 
 export function TopBar({
   fileName,
-  liveFiltering,
   onSearchChange,
-  onToggleLive,
+  onSave,
   onExport,
   searchInputRef,
 }: TopBarProps) {
@@ -61,28 +59,16 @@ export function TopBar({
           />
         </div>
 
-        {/* Live Toggle */}
-        <button
-          onClick={onToggleLive}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-            liveFiltering
-              ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-          title={liveFiltering ? 'Live filtering ON' : 'Live filtering OFF'}
+        {/* Save Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onSave}
+          className="h-9"
         >
-          {liveFiltering ? (
-            <>
-              <Zap className="h-4 w-4" />
-              Live
-            </>
-          ) : (
-            <>
-              <ZapOff className="h-4 w-4" />
-              Manual
-            </>
-          )}
-        </button>
+          <Save className="h-4 w-4 mr-2" />
+          Salva
+        </Button>
       </div>
 
       {/* Right: Actions */}

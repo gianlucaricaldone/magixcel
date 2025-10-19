@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   row_count INTEGER NOT NULL,
   column_count INTEGER NOT NULL,
   file_size INTEGER NOT NULL,
-  file_type TEXT NOT NULL CHECK(file_type IN ('xlsx', 'xls', 'csv'))
+  file_type TEXT NOT NULL CHECK(file_type IN ('xlsx', 'xls', 'csv')),
+  active_filters TEXT -- JSON string containing filters state per sheet
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at DESC);

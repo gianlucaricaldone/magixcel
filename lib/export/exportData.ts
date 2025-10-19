@@ -1,5 +1,8 @@
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
+import { ISheetData } from '@/lib/processing/excel-processor';
+import { IFilterConfig } from '@/types';
+import { applyFilters } from '@/lib/processing/filter-engine';
 
 /**
  * Export data to CSV format
@@ -16,7 +19,7 @@ export function exportToCSV(data: any[], filename: string) {
 }
 
 /**
- * Export data to Excel format
+ * Export data to Excel format (single sheet)
  */
 export function exportToExcel(data: any[], filename: string) {
   if (!data || data.length === 0) {
@@ -32,6 +35,58 @@ export function exportToExcel(data: any[], filename: string) {
 
   // Add worksheet to workbook
   XLSX.utils.book_append_sheet(wb, ws, 'Data');
+
+  // Generate Excel file and trigger download
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
+
+/**
+ * Export multiple sheets to Excel format with filters applied
+ */
+export function exportToExcelMultiSheet(
+  sheets: ISheetData[],
+  filtersBySheet: Record<string, { filters: any[]; combinator: 'AND' | 'OR' }>,
+  filename: string
+) {
+  if (!sheets || sheets.length === 0) {
+    alert('Nessun dato da esportare');
+    return;
+  }
+
+  // Create a new workbook
+  const wb = XLSX.utils.book_new();
+
+  // Process each sheet
+  sheets.forEach((sheet) => {
+    let dataToExport = sheet.data;
+
+    // Apply filters if they exist for this sheet
+    const sheetFilters = filtersBySheet[sheet.sheetName];
+    if (sheetFilters && sheetFilters.filters.length > 0) {
+      const filterConfig: IFilterConfig = {
+        filters: sheetFilters.filters,
+        combinator: sheetFilters.combinator,
+      };
+      dataToExport = applyFilters(sheet.data, filterConfig, '');
+    }
+
+    // Skip empty sheets
+    if (dataToExport.length === 0) {
+      return;
+    }
+
+    // Convert data to worksheet
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+
+    // Add worksheet to workbook with sheet name
+    XLSX.utils.book_append_sheet(wb, ws, sheet.sheetName);
+  });
+
+  // Check if workbook has any sheets
+  if (wb.SheetNames.length === 0) {
+    alert('Nessun dato da esportare');
+    return;
+  }
 
   // Generate Excel file and trigger download
   XLSX.writeFile(wb, `${filename}.xlsx`);

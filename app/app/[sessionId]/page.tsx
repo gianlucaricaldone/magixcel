@@ -15,6 +15,7 @@ import { AnalysisPanel } from '@/components/dashboard/AnalysisPanel';
 import { StatusBar } from '@/components/dashboard/StatusBar';
 import { KeyboardShortcutsHelp } from '@/components/dashboard/KeyboardShortcutsHelp';
 import { TableStatsBar } from '@/components/dashboard/TableStatsBar';
+import { SheetTabs } from '@/components/dashboard/SheetTabs';
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import { Button } from '@/components/ui/button';
 import { applyFilters } from '@/lib/processing/filter-engine';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { exportToCSV, exportToExcel, exportToJSON, getExportFilename } from '@/lib/export/exportData';
+import { exportToCSV, exportToExcel, exportToExcelMultiSheet, exportToJSON, getExportFilename } from '@/lib/export/exportData';
 import { IFileMetadata } from '@/types';
 
 export default function SessionPage() {
@@ -36,8 +37,8 @@ export default function SessionPage() {
   const sessionId = params.sessionId as string;
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
-  const { data, setData, filteredData, setFilteredData } = useDataStore();
-  const { getFilterConfig, filters, liveFiltering, setLiveFiltering } = useFilterStore();
+  const { data, setData, filteredData, setFilteredData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet, updateSheetFilteredCount } = useDataStore();
+  const { getFilterConfig, filters, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet } = useFilterStore();
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -115,25 +116,26 @@ export default function SessionPage() {
     }
   }, [sessionId]);
 
-  // Apply filters and global search
+  // Sync active sheet between data store and filter store
+  useEffect(() => {
+    if (activeSheet) {
+      setFilterActiveSheet(activeSheet);
+    }
+  }, [activeSheet, setFilterActiveSheet]);
+
+  // Apply filters and global search (always LIVE)
   useEffect(() => {
     if (data.length === 0) return;
 
-    // Only apply filters automatically if live filtering is enabled
-    if (liveFiltering) {
-      const filterConfig = getFilterConfig();
-      const filtered = applyFilters(data, filterConfig, debouncedGlobalSearch);
-      setFilteredData(filtered);
-    }
-  }, [debouncedGlobalSearch, data, filters, liveFiltering]);
-
-  // Manual apply filters function
-  const handleApplyFilters = () => {
-    if (data.length === 0) return;
     const filterConfig = getFilterConfig();
-    const filtered = applyFilters(data, filterConfig, globalSearch);
+    const filtered = applyFilters(data, filterConfig, debouncedGlobalSearch);
     setFilteredData(filtered);
-  };
+
+    // Update filtered count for active sheet
+    if (activeSheet) {
+      updateSheetFilteredCount(activeSheet, filtered.length);
+    }
+  }, [debouncedGlobalSearch, data, filters, activeSheet]);
 
   const loadSession = async (id: string) => {
     setIsLoadingSession(true);
@@ -172,7 +174,30 @@ export default function SessionPage() {
       };
 
       setSession(id, sessionMetadata);
-      setData(dataResult.data);
+
+      // Load sheets if available (Excel files)
+      if (dataResult.sheets && dataResult.sheets.length > 0) {
+        setSheets(dataResult.sheets);
+        // Set active sheet in filter store
+        if (dataResult.sheets[0]) {
+          setFilterActiveSheet(dataResult.sheets[0].sheetName);
+        }
+      } else {
+        setData(dataResult.data);
+        // No sheets, set null for CSV files
+        setFilterActiveSheet(null);
+      }
+
+      // Restore saved filters if available
+      if (session.active_filters) {
+        try {
+          const savedFilters = JSON.parse(session.active_filters);
+          // Restore filters to filter store
+          restoreFiltersBySheet(savedFilters);
+        } catch (error) {
+          console.error('Error parsing saved filters:', error);
+        }
+      }
     } catch (error: any) {
       console.error('Failed to load session:', error);
       setError(error.message || 'Failed to load session');
@@ -184,25 +209,42 @@ export default function SessionPage() {
   };
 
   const handleExport = (format: 'csv' | 'excel' | 'json') => {
-    if (!filteredData || filteredData.length === 0) {
-      alert('Nessun dato da esportare');
-      return;
-    }
-
     // Generate filename with timestamp and filter info
-    const isFiltered = filteredData.length !== data.length;
-    const suffix = isFiltered ? 'filtered' : 'all';
+    const hasFilters = sheets.length > 0 && sheets.some(sheet =>
+      sheet.filteredRowCount !== undefined && sheet.filteredRowCount !== sheet.rowCount
+    );
+    const suffix = hasFilters ? 'filtered' : 'all';
     const filename = getExportFilename(metadata?.fileName || 'export', suffix);
 
     // Export based on format
     switch (format) {
       case 'csv':
+        // CSV exports only active sheet data
+        if (!filteredData || filteredData.length === 0) {
+          alert('Nessun dato da esportare');
+          return;
+        }
         exportToCSV(filteredData, filename);
         break;
       case 'excel':
-        exportToExcel(filteredData, filename);
+        // Excel exports all sheets with their filters
+        if (sheets.length > 1) {
+          const { filtersBySheet } = useFilterStore.getState();
+          exportToExcelMultiSheet(sheets, filtersBySheet, filename);
+        } else {
+          if (!filteredData || filteredData.length === 0) {
+            alert('Nessun dato da esportare');
+            return;
+          }
+          exportToExcel(filteredData, filename);
+        }
         break;
       case 'json':
+        // JSON exports only active sheet data
+        if (!filteredData || filteredData.length === 0) {
+          alert('Nessun dato da esportare');
+          return;
+        }
         exportToJSON(filteredData, filename);
         break;
     }
@@ -212,6 +254,32 @@ export default function SessionPage() {
     // TODO: Implement save preset
     console.log('Save preset:', { presetName, presetDescription, presetCategory });
     setShowSavePreset(false);
+  };
+
+  const handleSaveSession = async () => {
+    try {
+      // Get current filters state from filter store
+      const { filtersBySheet } = useFilterStore.getState();
+
+      const response = await fetch(`/api/session/${sessionId}/filters`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filtersBySheet }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert('Sessione salvata con successo!');
+      } else {
+        alert('Errore nel salvataggio: ' + result.error.message);
+      }
+    } catch (error) {
+      console.error('Error saving session:', error);
+      alert('Errore nel salvataggio della sessione');
+    }
   };
 
   if (isLoadingSession || !metadata) {
@@ -225,14 +293,18 @@ export default function SessionPage() {
     );
   }
 
+  // Get columns from active sheet or metadata
+  const activeSheetData = sheets.find(s => s.sheetName === activeSheet);
+  const columns = activeSheetData ? activeSheetData.columns : metadata.columns;
+  const columnCount = activeSheetData ? activeSheetData.columnCount : metadata.columnCount;
+
   return (
     <div className="h-screen flex flex-col bg-slate-50">
       {/* TopBar - Fixed */}
       <TopBar
         fileName={metadata.fileName}
-        liveFiltering={liveFiltering}
         onSearchChange={setGlobalSearch}
-        onToggleLive={() => setLiveFiltering(!liveFiltering)}
+        onSave={handleSaveSession}
         onExport={handleExport}
         searchInputRef={searchInputRef}
       />
@@ -244,7 +316,6 @@ export default function SessionPage() {
           filterPanel={
             <FilterPanel
               onOpenFilterBuilder={() => setShowFilterBuilder(true)}
-              onApplyFilters={handleApplyFilters}
             />
           }
           presetsPanel={
@@ -259,21 +330,25 @@ export default function SessionPage() {
         />
 
         {/* Main Content - Data Table */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* Table Container - Can scroll */}
+          <div className="flex-1 min-h-0 overflow-hidden">
             <div className="h-full bg-white overflow-hidden flex flex-col">
               {/* Stats Bar */}
               <TableStatsBar
                 totalRows={data.length}
-                totalColumns={metadata.columnCount}
+                totalColumns={columnCount}
                 filteredRows={filteredData.length}
               />
               {/* Table */}
               <div className="flex-1 overflow-hidden">
-                <DataTable columns={metadata.columns} />
+                <DataTable columns={columns} />
               </div>
             </div>
           </div>
+
+          {/* Sheet Tabs - Excel only - Always visible at bottom */}
+          <SheetTabs />
 
           {/* StatusBar - Fixed at bottom */}
           <StatusBar
@@ -293,7 +368,7 @@ export default function SessionPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto py-4">
-            <FilterBuilder columns={metadata.columns} />
+            <FilterBuilder columns={columns} />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowFilterBuilder(false)}>

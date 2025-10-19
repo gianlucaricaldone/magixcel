@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { storage } from '@/lib/storage';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
-export async function GET(
+export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
     const sessionId = params.id;
 
-    // Validate session
+    // Validate session exists
     const session = await db.getSession(sessionId);
     if (!session) {
       return NextResponse.json(
@@ -25,33 +24,28 @@ export async function GET(
       );
     }
 
-    // Load data
-    const dataBuffer = await storage.get(`${sessionId}/data.json`);
-    const data = JSON.parse(dataBuffer.toString('utf8'));
+    // Get filter state from request body
+    const { filtersBySheet } = await request.json();
 
-    // Try to load sheets data if available (Excel files)
-    let sheets = null;
-    try {
-      const sheetsBuffer = await storage.get(`${sessionId}/sheets.json`);
-      sheets = JSON.parse(sheetsBuffer.toString('utf8'));
-    } catch (error) {
-      // Sheets file doesn't exist - probably a CSV file
-      sheets = null;
-    }
+    // Save filters as JSON string
+    const filtersJson = JSON.stringify(filtersBySheet);
+
+    await db.updateSession(sessionId, {
+      active_filters: filtersJson,
+    });
 
     return NextResponse.json({
       success: true,
-      data,
-      sheets,
+      message: 'Filters saved successfully',
     });
   } catch (error: any) {
-    console.error('Session data error:', error);
+    console.error('Save filters error:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
           code: ERROR_CODES.PROCESSING_ERROR,
-          message: error.message || 'Failed to load session data',
+          message: error.message || 'Failed to save filters',
         },
       },
       { status: 500 }

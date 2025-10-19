@@ -7,7 +7,10 @@
       "Bash(npm run dev)",
       "Bash(tree app/ -L 3 -I node_modules)",
       "Bash(npm install @radix-ui/react-dialog)",
-      "Bash(npm install @tanstack/react-virtual)"
+      "Bash(npm install @tanstack/react-virtual)",
+      "Bash(sqlite3 data/magixcel.db \"ALTER TABLE sessions ADD COLUMN IF NOT EXISTS active_filters TEXT;\")",
+      "Bash(sqlite3 data/magixcel.db \"ALTER TABLE sessions ADD COLUMN active_filters TEXT;\")",
+      "Bash(git add -A)"
     ],
     "deny": [],
     "ask": []

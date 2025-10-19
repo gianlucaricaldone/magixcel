@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
     const fileName = file.name.toLowerCase();
     let metadata;
     let data;
+    let sheets = null;
 
     if (fileName.endsWith('.csv')) {
       const result = await processCSVFile(buffer, file.name, {
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       });
       metadata = result.metadata;
       data = result.data;
+      sheets = result.sheets;
     } else {
       return NextResponse.json(
         {
@@ -111,6 +113,12 @@ export async function POST(request: NextRequest) {
     // Store data as JSON in a separate file
     const dataBuffer = Buffer.from(JSON.stringify(data));
     await storage.save(session.id, 'data.json', dataBuffer);
+
+    // Store sheets data if available (Excel files with multiple sheets)
+    if (sheets && sheets.length > 0) {
+      const sheetsBuffer = Buffer.from(JSON.stringify(sheets));
+      await storage.save(session.id, 'sheets.json', sheetsBuffer);
+    }
 
     return NextResponse.json({
       success: true,

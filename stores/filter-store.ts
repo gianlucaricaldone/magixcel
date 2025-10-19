@@ -4,14 +4,24 @@ import { IFilterPreset } from '@/types/database';
 import { nanoid } from 'nanoid';
 
 /**
- * Filter state management with support for grouped filters
+ * Filter state management with support for grouped filters and per-sheet filters
  */
 
-interface FilterState {
+interface SheetFilters {
   filters: (IFilter | IFilterGroup)[];
   combinator: FilterCombinator;
+}
+
+interface FilterState {
+  // Per-sheet filters
+  filtersBySheet: Record<string, SheetFilters>;
+  activeSheet: string | null;
+
+  // Legacy single filters (for CSV files without sheets)
+  filters: (IFilter | IFilterGroup)[];
+  combinator: FilterCombinator;
+
   activeFilterHash: string | null;
-  liveFiltering: boolean;
   presets: IFilterPreset[];
   presetsLoading: boolean;
 
@@ -25,7 +35,8 @@ interface FilterState {
   clearFilters: () => void;
   setCombinator: (combinator: FilterCombinator) => void;
   setActiveFilterHash: (hash: string | null) => void;
-  setLiveFiltering: (enabled: boolean) => void;
+  setActiveSheet: (sheetName: string | null) => void;
+  restoreFiltersBySheet: (filtersBySheet: Record<string, SheetFilters>) => void;
   getFilterConfig: () => IFilterConfig;
 
   // Preset Actions
@@ -37,38 +48,87 @@ interface FilterState {
 }
 
 export const useFilterStore = create<FilterState>((set, get) => ({
+  filtersBySheet: {},
+  activeSheet: null,
   filters: [],
   combinator: 'AND',
   activeFilterHash: null,
-  liveFiltering: true,
   presets: [],
   presetsLoading: false,
 
   addFilter: (filter, groupId) => {
     const newFilter: IFilter = { ...filter, id: nanoid() };
+    const state = get();
 
-    if (groupId) {
-      // Add to specific group
+    if (state.activeSheet) {
+      // Per-sheet filters
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      const updatedFilters = groupId
+        ? addFilterToGroup(sheetFilters.filters, groupId, newFilter)
+        : [...sheetFilters.filters, newFilter];
+
       set((state) => ({
-        filters: addFilterToGroup(state.filters, groupId, newFilter),
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updatedFilters,
+          },
+        },
       }));
     } else {
-      // Add to root
+      // Legacy single filters
+      if (groupId) {
+        set((state) => ({
+          filters: addFilterToGroup(state.filters, groupId, newFilter),
+        }));
+      } else {
+        set((state) => ({
+          filters: [...state.filters, newFilter],
+        }));
+      }
+    }
+  },
+
+  updateFilter: (id, updates) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
       set((state) => ({
-        filters: [...state.filters, newFilter],
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updateFilterInTree(sheetFilters.filters, id, updates),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: updateFilterInTree(state.filters, id, updates),
       }));
     }
   },
 
-  updateFilter: (id, updates) =>
-    set((state) => ({
-      filters: updateFilterInTree(state.filters, id, updates),
-    })),
-
-  removeFilter: (id) =>
-    set((state) => ({
-      filters: removeFilterFromTree(state.filters, id),
-    })),
+  removeFilter: (id) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: removeFilterFromTree(sheetFilters.filters, id),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: removeFilterFromTree(state.filters, id),
+      }));
+    }
+  },
 
   addGroup: (combinator, parentGroupId) => {
     const newGroup: IFilterGroup = {
@@ -78,43 +138,148 @@ export const useFilterStore = create<FilterState>((set, get) => ({
       filters: [],
     };
 
-    if (parentGroupId) {
-      // Add to specific parent group
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      const updatedFilters = parentGroupId
+        ? addFilterToGroup(sheetFilters.filters, parentGroupId, newGroup)
+        : [...sheetFilters.filters, newGroup];
+
       set((state) => ({
-        filters: addFilterToGroup(state.filters, parentGroupId, newGroup),
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updatedFilters,
+          },
+        },
       }));
     } else {
-      // Add to root
+      if (parentGroupId) {
+        set((state) => ({
+          filters: addFilterToGroup(state.filters, parentGroupId, newGroup),
+        }));
+      } else {
+        set((state) => ({
+          filters: [...state.filters, newGroup],
+        }));
+      }
+    }
+  },
+
+  updateGroup: (id, combinator) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
       set((state) => ({
-        filters: [...state.filters, newGroup],
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updateGroupInTree(sheetFilters.filters, id, combinator),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: updateGroupInTree(state.filters, id, combinator),
       }));
     }
   },
 
-  updateGroup: (id, combinator) =>
-    set((state) => ({
-      filters: updateGroupInTree(state.filters, id, combinator),
-    })),
+  removeGroup: (id) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: removeFilterFromTree(sheetFilters.filters, id),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: removeFilterFromTree(state.filters, id),
+      }));
+    }
+  },
 
-  removeGroup: (id) =>
-    set((state) => ({
-      filters: removeFilterFromTree(state.filters, id),
-    })),
+  clearFilters: () => {
+    const state = get();
+    if (state.activeSheet) {
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            filters: [],
+            combinator: 'AND',
+          },
+        },
+        activeFilterHash: null,
+      }));
+    } else {
+      set({
+        filters: [],
+        activeFilterHash: null,
+      });
+    }
+  },
 
-  clearFilters: () =>
-    set({
-      filters: [],
-      activeFilterHash: null,
-    }),
-
-  setCombinator: (combinator) => set({ combinator }),
+  setCombinator: (combinator) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            combinator,
+          },
+        },
+      }));
+    } else {
+      set({ combinator });
+    }
+  },
 
   setActiveFilterHash: (hash) => set({ activeFilterHash: hash }),
 
-  setLiveFiltering: (enabled) => set({ liveFiltering: enabled }),
+  setActiveSheet: (sheetName) => {
+    set({ activeSheet: sheetName });
+    // Initialize sheet filters if not exists
+    if (sheetName) {
+      const state = get();
+      if (!state.filtersBySheet[sheetName]) {
+        set((state) => ({
+          filtersBySheet: {
+            ...state.filtersBySheet,
+            [sheetName]: {
+              filters: [],
+              combinator: 'AND',
+            },
+          },
+        }));
+      }
+    }
+  },
+
+  restoreFiltersBySheet: (filtersBySheet) => {
+    set({ filtersBySheet });
+  },
 
   getFilterConfig: () => {
     const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      return {
+        filters: sheetFilters.filters,
+        combinator: sheetFilters.combinator,
+      };
+    }
     return {
       filters: state.filters,
       combinator: state.combinator,
@@ -177,10 +342,26 @@ export const useFilterStore = create<FilterState>((set, get) => ({
 
       if (result.success) {
         const config: IFilterConfig = JSON.parse(result.preset.filter_config);
-        set({
-          filters: config.filters,
-          combinator: config.combinator,
-        });
+        const state = get();
+
+        if (state.activeSheet) {
+          // Load preset to active sheet
+          set((state) => ({
+            filtersBySheet: {
+              ...state.filtersBySheet,
+              [state.activeSheet!]: {
+                filters: config.filters,
+                combinator: config.combinator,
+              },
+            },
+          }));
+        } else {
+          // Legacy single filters
+          set({
+            filters: config.filters,
+            combinator: config.combinator,
+          });
+        }
       } else {
         console.error('Failed to load preset:', result.error);
       }
