@@ -2,8 +2,19 @@
  * Database type definitions
  */
 
+export interface IWorkspace {
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+  updated_at: string;
+  color: string; // Hex color code
+  icon: string; // Icon identifier
+}
+
 export interface ISession {
   id: string;
+  workspace_id: string;
   name: string;
   created_at: string;
   updated_at: string;
@@ -56,12 +67,20 @@ export interface IFilterPreset {
 }
 
 export interface IDatabase {
+  // Workspaces
+  getWorkspace(id: string): Promise<IWorkspace | null>;
+  createWorkspace(data: Omit<IWorkspace, 'id' | 'created_at' | 'updated_at'>): Promise<IWorkspace>;
+  updateWorkspace(id: string, data: Partial<Omit<IWorkspace, 'id' | 'created_at'>>): Promise<IWorkspace>;
+  deleteWorkspace(id: string): Promise<void>;
+  listWorkspaces(limit?: number, offset?: number): Promise<IWorkspace[]>;
+
   // Sessions
   getSession(id: string): Promise<ISession | null>;
   createSession(data: Omit<ISession, 'id' | 'created_at' | 'updated_at'>): Promise<ISession>;
   updateSession(id: string, data: Partial<ISession>): Promise<ISession>;
   deleteSession(id: string): Promise<void>;
   listSessions(limit?: number, offset?: number): Promise<ISession[]>;
+  listSessionsByWorkspace(workspaceId: string, limit?: number, offset?: number): Promise<ISession[]>;
 
   // Files
   getFile(id: string): Promise<IFile | null>;

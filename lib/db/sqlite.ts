@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
-import { IDatabase, ISession, IFile, ISavedFilter, ICachedResult, IFilterPreset } from '@/types';
+import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IFilterPreset } from '@/types';
 import fs from 'fs';
 import path from 'path';
 
@@ -26,6 +26,73 @@ export class SQLiteDB implements IDatabase {
     this.db.exec(schema);
   }
 
+  // Workspaces
+  async getWorkspace(id: string): Promise<IWorkspace | null> {
+    const stmt = this.db.prepare('SELECT * FROM workspaces WHERE id = ?');
+    return (stmt.get(id) as IWorkspace) || null;
+  }
+
+  async createWorkspace(data: Omit<IWorkspace, 'id' | 'created_at' | 'updated_at'>): Promise<IWorkspace> {
+    const id = nanoid();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO workspaces (
+        id, name, description, created_at, updated_at, color, icon
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.name,
+      data.description || null,
+      now,
+      now,
+      data.color,
+      data.icon
+    );
+
+    return this.getWorkspace(id) as Promise<IWorkspace>;
+  }
+
+  async updateWorkspace(id: string, data: Partial<Omit<IWorkspace, 'id' | 'created_at'>>): Promise<IWorkspace> {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    Object.entries(data).forEach(([key, value]) => {
+      if (key !== 'id' && key !== 'created_at') {
+        updates.push(`${key} = ?`);
+        values.push(value);
+      }
+    });
+
+    updates.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE workspaces SET ${updates.join(', ')} WHERE id = ?
+    `);
+
+    stmt.run(...values);
+
+    return this.getWorkspace(id) as Promise<IWorkspace>;
+  }
+
+  async deleteWorkspace(id: string): Promise<void> {
+    const stmt = this.db.prepare('DELETE FROM workspaces WHERE id = ?');
+    stmt.run(id);
+  }
+
+  async listWorkspaces(limit = 50, offset = 0): Promise<IWorkspace[]> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM workspaces
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+    return stmt.all(limit, offset) as IWorkspace[];
+  }
+
   // Sessions
   async getSession(id: string): Promise<ISession | null> {
     const stmt = this.db.prepare('SELECT * FROM sessions WHERE id = ?');
@@ -38,13 +105,14 @@ export class SQLiteDB implements IDatabase {
 
     const stmt = this.db.prepare(`
       INSERT INTO sessions (
-        id, name, created_at, updated_at, original_file_name,
+        id, workspace_id, name, created_at, updated_at, original_file_name,
         original_file_hash, row_count, column_count, file_size, file_type
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
       id,
+      data.workspace_id,
       data.name,
       now,
       now,
@@ -95,6 +163,16 @@ export class SQLiteDB implements IDatabase {
       LIMIT ? OFFSET ?
     `);
     return stmt.all(limit, offset) as ISession[];
+  }
+
+  async listSessionsByWorkspace(workspaceId: string, limit = 50, offset = 0): Promise<ISession[]> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM sessions
+      WHERE workspace_id = ?
+      ORDER BY created_at DESC
+      LIMIT ? OFFSET ?
+    `);
+    return stmt.all(workspaceId, limit, offset) as ISession[];
   }
 
   // Files

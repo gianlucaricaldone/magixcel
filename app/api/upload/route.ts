@@ -12,6 +12,7 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const sessionName = formData.get('sessionName') as string;
+    const workspaceId = (formData.get('workspaceId') as string) || 'default'; // Use default workspace if not specified
 
     if (!file) {
       return NextResponse.json(
@@ -89,6 +90,7 @@ export async function POST(request: NextRequest) {
 
     // Create session
     const session = await db.createSession({
+      workspace_id: workspaceId,
       name: sessionName || metadata.fileName,
       original_file_name: metadata.fileName,
       original_file_hash: hash,

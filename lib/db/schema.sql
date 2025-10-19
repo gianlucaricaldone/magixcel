@@ -1,9 +1,23 @@
 -- MagiXcel Database Schema
 -- SQLite version
 
+-- Workspaces table
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  description TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  color TEXT DEFAULT '#3B82F6', -- Hex color for workspace identification
+  icon TEXT DEFAULT 'folder' -- Icon identifier for workspace
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspaces_created_at ON workspaces(created_at DESC);
+
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
+  workspace_id TEXT NOT NULL,
   name TEXT NOT NULL,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
@@ -13,11 +27,13 @@ CREATE TABLE IF NOT EXISTS sessions (
   column_count INTEGER NOT NULL,
   file_size INTEGER NOT NULL,
   file_type TEXT NOT NULL CHECK(file_type IN ('xlsx', 'xls', 'csv')),
-  active_filters TEXT -- JSON string containing filters state per sheet
+  active_filters TEXT, -- JSON string containing filters state per sheet
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_created_at ON sessions(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_sessions_file_hash ON sessions(original_file_hash);
+CREATE INDEX IF NOT EXISTS idx_sessions_workspace_id ON sessions(workspace_id);
 
 -- Files table
 CREATE TABLE IF NOT EXISTS files (

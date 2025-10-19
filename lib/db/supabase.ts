@@ -1,4 +1,4 @@
-import { IDatabase, ISession, IFile, ISavedFilter, ICachedResult, IFilterPreset } from '@/types';
+import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IFilterPreset } from '@/types';
 
 /**
  * Supabase implementation (stub for future use)
@@ -12,6 +12,28 @@ export class SupabaseDB implements IDatabase {
     throw new Error('Supabase implementation not yet available. Use SQLite for development.');
   }
 
+  // Workspaces
+  async getWorkspace(id: string): Promise<IWorkspace | null> {
+    throw new Error('Not implemented');
+  }
+
+  async createWorkspace(data: Omit<IWorkspace, 'id' | 'created_at' | 'updated_at'>): Promise<IWorkspace> {
+    throw new Error('Not implemented');
+  }
+
+  async updateWorkspace(id: string, data: Partial<Omit<IWorkspace, 'id' | 'created_at'>>): Promise<IWorkspace> {
+    throw new Error('Not implemented');
+  }
+
+  async deleteWorkspace(id: string): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  async listWorkspaces(limit?: number, offset?: number): Promise<IWorkspace[]> {
+    throw new Error('Not implemented');
+  }
+
+  // Sessions
   async getSession(id: string): Promise<ISession | null> {
     throw new Error('Not implemented');
   }
@@ -29,6 +51,10 @@ export class SupabaseDB implements IDatabase {
   }
 
   async listSessions(limit?: number, offset?: number): Promise<ISession[]> {
+    throw new Error('Not implemented');
+  }
+
+  async listSessionsByWorkspace(workspaceId: string, limit?: number, offset?: number): Promise<ISession[]> {
     throw new Error('Not implemented');
   }
 

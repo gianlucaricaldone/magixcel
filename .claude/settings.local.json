@@ -10,7 +10,11 @@
       "Bash(npm install @tanstack/react-virtual)",
       "Bash(sqlite3 data/magixcel.db \"ALTER TABLE sessions ADD COLUMN IF NOT EXISTS active_filters TEXT;\")",
       "Bash(sqlite3 data/magixcel.db \"ALTER TABLE sessions ADD COLUMN active_filters TEXT;\")",
-      "Bash(git add -A)"
+      "Bash(git add -A)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nImplementato supporto multi-sheet Excel e filtri live persistenti\n\n- Aggiunto supporto completo per file Excel multi-sheet con navigation tabs\n- Rimosso toggle Live/Manual: tutti i filtri ora applicati automaticamente\n- Implementato salvataggio filtri per foglio nel database (colonna active_filters)\n- Modificato export Excel per esportare tutti i fogli con filtri applicati\n- Aggiunto tracking conteggio righe filtrate per ogni foglio\n- Rimossa navbar dalla pagina sessione per massimizzare spazio tabella\n- Creato componente SheetTabs per navigazione fogli stile Excel\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(sqlite3 data/magixcel.db \".schema workspaces\")",
+      "Bash(sqlite3 data/magixcel.db \".schema sessions\")",
+      "Bash(sqlite3 data/magixcel.db \"SELECT * FROM workspaces;\")"
     ],
     "deny": [],
     "ask": []
