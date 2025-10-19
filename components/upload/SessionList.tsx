@@ -8,17 +8,25 @@ import { FileSpreadsheet, Calendar, Database, ExternalLink } from 'lucide-react'
 import { ISession } from '@/types';
 import { formatRelativeTime, formatFileSize, formatNumber } from '@/lib/utils/formatters';
 
-export function SessionList() {
+interface SessionListProps {
+  workspaceId?: string;
+}
+
+export function SessionList({ workspaceId }: SessionListProps) {
   const [sessions, setSessions] = useState<ISession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadSessions();
-  }, []);
+  }, [workspaceId]);
 
   const loadSessions = async () => {
     try {
-      const response = await fetch('/api/sessions');
+      const endpoint = workspaceId
+        ? `/api/workspace/${workspaceId}/sessions`
+        : '/api/sessions';
+
+      const response = await fetch(endpoint);
       const result = await response.json();
 
       if (result.success && result.sessions) {
@@ -53,8 +61,13 @@ export function SessionList() {
 
   return (
     <div className="space-y-3">
-      {sessions.map((session) => (
-        <Link href={`/app/${session.id}`} key={session.id}>
+      {sessions.map((session) => {
+        const sessionLink = workspaceId
+          ? `/app/workspace/${workspaceId}/session/${session.id}`
+          : `/app/workspace/${session.workspace_id}/session/${session.id}`;
+
+        return (
+          <Link href={sessionLink} key={session.id}>
           <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between">
@@ -91,7 +104,8 @@ export function SessionList() {
             </CardContent>
           </Card>
         </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }

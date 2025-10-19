@@ -10,7 +10,11 @@ import { useDataStore } from '@/stores/data-store';
 import { validateFile } from '@/lib/utils/validators';
 import { formatFileSize } from '@/lib/utils/formatters';
 
-export function FileUploader() {
+interface FileUploaderProps {
+  workspaceId?: string;
+}
+
+export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
   const router = useRouter();
   const { setSession, setLoading, setError } = useSessionStore();
   const { setData } = useDataStore();
@@ -37,6 +41,7 @@ export function FileUploader() {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('sessionName', file.name.replace(/\.[^/.]+$/, ''));
+      formData.append('workspaceId', workspaceId);
 
       const response = await fetch('/api/upload', {
         method: 'POST',
@@ -62,7 +67,7 @@ export function FileUploader() {
         }
 
         setUploadProgress(100);
-        router.push(`/app/${result.sessionId}`);
+        router.push(`/app/workspace/${workspaceId}/session/${result.sessionId}`);
       } else {
         throw new Error('Upload failed');
       }
@@ -71,7 +76,7 @@ export function FileUploader() {
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [setSession, setData, setLoading, setError, router]);
+  }, [setSession, setData, setLoading, setError, router, workspaceId]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {

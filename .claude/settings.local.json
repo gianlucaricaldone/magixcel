@@ -1,20 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx create-next-app@14 . --typescript --tailwind --eslint --app --src-dir=false --import-alias=\"@/*\" --use-npm)",
-      "Bash(npm install)",
-      "Bash(npm run type-check)",
-      "Bash(npm run dev)",
-      "Bash(tree app/ -L 3 -I node_modules)",
-      "Bash(npm install @radix-ui/react-dialog)",
-      "Bash(npm install @tanstack/react-virtual)",
-      "Bash(sqlite3 data/magixcel.db \"ALTER TABLE sessions ADD COLUMN IF NOT EXISTS active_filters TEXT;\")",
-      "Bash(sqlite3 data/magixcel.db \"ALTER TABLE sessions ADD COLUMN active_filters TEXT;\")",
-      "Bash(git add -A)",
-      "Bash(git commit -m \"$(cat <<''EOF''\nImplementato supporto multi-sheet Excel e filtri live persistenti\n\n- Aggiunto supporto completo per file Excel multi-sheet con navigation tabs\n- Rimosso toggle Live/Manual: tutti i filtri ora applicati automaticamente\n- Implementato salvataggio filtri per foglio nel database (colonna active_filters)\n- Modificato export Excel per esportare tutti i fogli con filtri applicati\n- Aggiunto tracking conteggio righe filtrate per ogni foglio\n- Rimossa navbar dalla pagina sessione per massimizzare spazio tabella\n- Creato componente SheetTabs per navigazione fogli stile Excel\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
-      "Bash(sqlite3 data/magixcel.db \".schema workspaces\")",
-      "Bash(sqlite3 data/magixcel.db \".schema sessions\")",
-      "Bash(sqlite3 data/magixcel.db \"SELECT * FROM workspaces;\")"
+      "Bash(git commit -m \"$(cat <<''EOF''\nAggiunta struttura workspaces al database\n\n- Creata tabella workspaces con campi: id, name, description, color, icon\n- Aggiunto campo workspace_id alla tabella sessions con foreign key\n- Implementati metodi CRUD per workspaces in SQLiteDB\n- Aggiunto metodo listSessionsByWorkspace per filtrare sessioni per workspace\n- Creato workspace ''default'' per sessioni esistenti tramite migration\n- Aggiornata upload route per supportare workspace_id (default: ''default'')\n- Aggiornati types IWorkspace e ISession\n- Implementati stub per workspaces in SupabaseDB\n\nMigration SQL: 002_add_workspaces.sql\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(npm install @radix-ui/react-label @radix-ui/react-dropdown-menu)"
     ],
     "deny": [],
     "ask": []
