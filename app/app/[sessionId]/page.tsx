@@ -260,8 +260,8 @@ export default function SessionPage() {
 
         {/* Main Content - Data Table */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 p-6 overflow-hidden">
-            <div className="h-full bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+          <div className="flex-1 overflow-hidden">
+            <div className="h-full bg-white overflow-hidden flex flex-col">
               {/* Stats Bar */}
               <TableStatsBar
                 totalRows={data.length}

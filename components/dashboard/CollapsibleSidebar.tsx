@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useRef, useState, useEffect } from 'react';
 import { Filter, FolderOpen, BarChart3, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
@@ -16,7 +16,9 @@ export function CollapsibleSidebar({
   presetsPanel,
   analysisPanel,
 }: CollapsibleSidebarProps) {
-  const { sidebarCollapsed, sidebarActiveTab, toggleSidebar, setSidebarTab } = useUIStore();
+  const { sidebarCollapsed, sidebarActiveTab, sidebarWidth, toggleSidebar, setSidebarTab, setSidebarWidth } = useUIStore();
+  const [isResizing, setIsResizing] = useState(false);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   const tabs = [
     { id: 'filters' as const, label: 'Filters', icon: Filter },
@@ -24,12 +26,46 @@ export function CollapsibleSidebar({
     { id: 'analysis' as const, label: 'Analysis', icon: BarChart3 },
   ];
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isResizing) return;
+
+    const newWidth = e.clientX;
+    // Min width: 200px, Max width: 600px
+    if (newWidth >= 200 && newWidth <= 600) {
+      setSidebarWidth(newWidth);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsResizing(false);
+  };
+
+  // Add/remove event listeners for resize
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   return (
     <div
+      ref={sidebarRef}
       className={cn(
-        'h-full bg-white border-r border-slate-200 transition-all duration-200 ease-in-out flex flex-col',
-        sidebarCollapsed ? 'w-16' : 'w-80'
+        'h-full bg-white border-r border-slate-200 transition-all duration-200 ease-in-out flex flex-col relative',
+        sidebarCollapsed ? 'w-12' : ''
       )}
+      style={!sidebarCollapsed ? { width: `${sidebarWidth}px` } : undefined}
     >
       {/* Tab Headers */}
       <div className="flex flex-col border-b border-slate-200">
@@ -42,7 +78,7 @@ export function CollapsibleSidebar({
               key={tab.id}
               onClick={() => setSidebarTab(tab.id)}
               className={cn(
-                'flex items-center gap-3 px-4 h-14 transition-colors relative',
+                'flex items-center gap-2 px-3 h-11 transition-colors relative',
                 isActive
                   ? 'text-blue-600 bg-blue-50'
                   : 'text-slate-600 hover:bg-slate-50',
@@ -66,13 +102,13 @@ export function CollapsibleSidebar({
         {!sidebarCollapsed && (
           <>
             {sidebarActiveTab === 'filters' && (
-              <div className="h-full overflow-y-auto p-4">{filterPanel}</div>
+              <div className="h-full overflow-y-auto p-3">{filterPanel}</div>
             )}
             {sidebarActiveTab === 'presets' && (
-              <div className="h-full overflow-y-auto p-4">{presetsPanel}</div>
+              <div className="h-full overflow-y-auto p-3">{presetsPanel}</div>
             )}
             {sidebarActiveTab === 'analysis' && (
-              <div className="h-full overflow-y-auto p-4">{analysisPanel}</div>
+              <div className="h-full overflow-y-auto p-3">{analysisPanel}</div>
             )}
           </>
         )}
@@ -95,6 +131,18 @@ export function CollapsibleSidebar({
           )}
         </button>
       </div>
+
+      {/* Resize Handle */}
+      {!sidebarCollapsed && (
+        <div
+          onMouseDown={handleMouseDown}
+          className={cn(
+            'absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-50',
+            isResizing && 'bg-blue-500'
+          )}
+          title="Drag to resize"
+        />
+      )}
     </div>
   );
 }
