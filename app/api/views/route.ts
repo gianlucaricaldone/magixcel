@@ -12,8 +12,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') || undefined;
     const sessionId = searchParams.get('sessionId') || undefined;
+    const sheetName = searchParams.get('sheetName') || undefined;
 
-    const views = await db.listViews(sessionId, category);
+    let views = await db.listViews(sessionId, category);
+
+    // Filter by sheet name if provided
+    if (sheetName !== undefined) {
+      views = views.filter((view) => view.sheet_name === sheetName);
+    }
 
     return NextResponse.json({
       success: true,
@@ -43,6 +49,7 @@ export async function POST(request: NextRequest) {
       description,
       category,
       sessionId,
+      sheetName,
       filterConfig,
       viewType = 'filters_only',
       snapshotData,
@@ -110,6 +117,7 @@ export async function POST(request: NextRequest) {
       description: description || '',
       category: category || 'Custom',
       session_id: bindToSession && sessionId ? sessionId : undefined,
+      sheet_name: sheetName || null,
       filter_config: JSON.stringify(filterConfig),
       view_type: viewType as ViewType,
       snapshot_data: snapshotData ? JSON.stringify(snapshotData) : undefined,

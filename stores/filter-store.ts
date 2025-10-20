@@ -41,7 +41,7 @@ interface FilterState {
   getFilterConfig: () => IFilterConfig;
 
   // View Actions
-  loadViews: (sessionId?: string) => Promise<void>;
+  loadViews: (sessionId?: string, sheetName?: string | null) => Promise<void>;
   saveView: (
     name: string,
     options?: {
@@ -308,10 +308,14 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   },
 
   // View Actions
-  loadViews: async (sessionId) => {
+  loadViews: async (sessionId, sheetName) => {
     set({ viewsLoading: true });
     try {
-      const url = sessionId ? `/api/views?sessionId=${sessionId}` : '/api/views';
+      const params = new URLSearchParams();
+      if (sessionId) params.append('sessionId', sessionId);
+      if (sheetName !== undefined) params.append('sheetName', sheetName || '');
+
+      const url = params.toString() ? `/api/views?${params.toString()}` : '/api/views';
       const response = await fetch(url);
       const result = await response.json();
       if (result.success) {
@@ -344,6 +348,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
           isPublic: options.isPublic || false,
           bindToSession: options.bindToSession || false,
           sessionId: options.sessionId,
+          sheetName: state.activeSheet, // Include current sheet name
         }),
       });
 
@@ -351,7 +356,8 @@ export const useFilterStore = create<FilterState>((set, get) => ({
 
       if (result.success) {
         // Reload views to get updated list
-        await get().loadViews(options.sessionId);
+        const currentState = get();
+        await get().loadViews(options.sessionId, currentState.activeSheet);
         set({ currentViewId: result.view.id });
         return {
           success: true,

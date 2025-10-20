@@ -77,8 +77,15 @@ export default function SessionPage() {
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Load all views on mount
+  // Load all views on mount and when sheet changes
   const { views } = useFilterStore();
+
+  // Reload views when active sheet changes
+  useEffect(() => {
+    if (sessionId) {
+      loadViews(sessionId, activeSheet);
+    }
+  }, [sessionId, activeSheet, loadViews]);
 
   // Load chart counts for all views
   useEffect(() => {
@@ -126,8 +133,8 @@ export default function SessionPage() {
 
       const result = await response.json();
       if (result.success) {
-        // Reload views
-        await loadViews();
+        // Reload views for current sheet
+        await loadViews(sessionId, activeSheet);
         // Update current view if it's the one being edited
         if (currentView?.id === viewId) {
           setCurrentView(result.view);
@@ -150,8 +157,8 @@ export default function SessionPage() {
         if (currentView?.id === viewId) {
           setCurrentView(null);
         }
-        // Reload views
-        await loadViews();
+        // Reload views for current sheet
+        await loadViews(sessionId, activeSheet);
       } else {
         alert(result.error || 'Failed to delete view');
       }
@@ -189,8 +196,8 @@ export default function SessionPage() {
 
         const result = await response.json();
         if (result.success) {
-          // Reload views to get updated data
-          await loadViews();
+          // Reload views to get updated data for current sheet
+          await loadViews(sessionId, activeSheet);
           // Update current view
           setCurrentView(result.view);
         }
@@ -424,8 +431,8 @@ export default function SessionPage() {
       setPresetCategory('Custom');
       setShowSavePreset(false);
 
-      // Reload views to update the list
-      await loadViews();
+      // Reload views to update the list for current sheet
+      await loadViews(sessionId, activeSheet);
 
       // Set as current view
       setCurrentView(result.view);

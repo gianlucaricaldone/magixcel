@@ -64,6 +64,7 @@ export interface IView {
   description?: string;
   category: string;
   session_id?: string; // Optional: link view to specific session
+  sheet_name?: string | null; // Sheet name for multi-sheet files (Excel); null for CSV
   filter_config: string; // JSON string of IFilterConfig
   view_type: ViewType;
   snapshot_data?: string; // JSON string of data rows (if view_type is 'snapshot')
