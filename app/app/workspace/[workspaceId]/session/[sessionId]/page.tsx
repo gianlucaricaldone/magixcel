@@ -14,6 +14,7 @@ import { ExplorerTab } from '@/components/tabs/ExplorerTab';
 import { ViewsTab } from '@/components/tabs/ViewsTab';
 import { AITab } from '@/components/tabs/AITab';
 import { FilterBuilder } from '@/components/filters/FilterBuilder';
+import { CommandPalette, useCommandPalette } from '@/components/command/CommandPalette';
 import {
   Dialog,
   DialogContent,
@@ -69,6 +70,9 @@ export default function SessionPage() {
   const [presetName, setPresetName] = useState('');
   const [presetDescription, setPresetDescription] = useState('');
   const [presetCategory, setPresetCategory] = useState('Custom');
+
+  // Command Palette (⌘K)
+  const commandPalette = useCommandPalette();
 
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -549,6 +553,9 @@ export default function SessionPage() {
       {showKeyboardShortcuts && (
         <KeyboardShortcutsHelp onClose={() => setShowKeyboardShortcuts(false)} />
       )}
+
+      {/* Command Palette (⌘K) */}
+      <CommandPalette isOpen={commandPalette.isOpen} onClose={commandPalette.close} />
     </div>
   );
 }
