@@ -15,6 +15,7 @@ interface ViewsTabProps {
   onSelectView: (view: IView) => void;
   onCreateView: () => void;
   onUpdateView: (viewId: string, updates: Partial<IView>) => void;
+  onDeleteView: (viewId: string) => void;
   chartCounts?: Record<string, number>;
 }
 
@@ -27,6 +28,7 @@ export function ViewsTab({
   onSelectView,
   onCreateView,
   onUpdateView,
+  onDeleteView,
   chartCounts,
 }: ViewsTabProps) {
   const [lastSaved, setLastSaved] = useState<Date | undefined>();
@@ -64,6 +66,7 @@ export function ViewsTab({
           columns={columns}
           columnCount={columnCount}
           onUpdateView={handleUpdateView}
+          onDeleteView={() => onDeleteView(currentView.id)}
           lastSaved={lastSaved}
         />
       ) : (

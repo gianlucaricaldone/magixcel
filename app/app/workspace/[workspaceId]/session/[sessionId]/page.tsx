@@ -138,6 +138,29 @@ export default function SessionPage() {
     }
   };
 
+  const handleDeleteView = async (viewId: string) => {
+    try {
+      const response = await fetch(`/api/views/${viewId}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        // Clear current view if it was deleted
+        if (currentView?.id === viewId) {
+          setCurrentView(null);
+        }
+        // Reload views
+        await loadViews();
+      } else {
+        alert(result.error || 'Failed to delete view');
+      }
+    } catch (error) {
+      console.error('Error deleting view:', error);
+      alert('Failed to delete view');
+    }
+  };
+
   // Keyboard shortcuts
   useKeyboardShortcuts([
     {
@@ -461,6 +484,7 @@ export default function SessionPage() {
             onSelectView={handleSelectView}
             onCreateView={handleCreateView}
             onUpdateView={handleUpdateView}
+            onDeleteView={handleDeleteView}
             chartCounts={chartCounts}
           />
         )}

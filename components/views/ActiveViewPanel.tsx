@@ -22,6 +22,7 @@ interface ActiveViewPanelProps {
   columns: string[];
   columnCount: number;
   onUpdateView: (updates: Partial<IView>) => void;
+  onDeleteView?: () => void;
   lastSaved?: Date;
 }
 
@@ -33,6 +34,7 @@ export function ActiveViewPanel({
   columns,
   columnCount,
   onUpdateView,
+  onDeleteView,
   lastSaved,
 }: ActiveViewPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('data');
@@ -243,7 +245,14 @@ export function ActiveViewPanel({
                 <DropdownMenuItem>Duplicate View</DropdownMenuItem>
                 <DropdownMenuItem>Save as Template</DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600">
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={() => {
+                    if (confirm(`Are you sure you want to delete "${view.name}"?`)) {
+                      onDeleteView?.();
+                    }
+                  }}
+                >
                   Delete View
                 </DropdownMenuItem>
               </DropdownMenuContent>

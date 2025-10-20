@@ -45,7 +45,8 @@ export function ViewDashboard({
     } else {
       loadCharts();
     }
-  }, [view.id, isTemporary, temporaryCharts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.id, isTemporary]); // Removed temporaryCharts to prevent infinite loop
 
   const loadCharts = async () => {
     setIsLoading(true);
