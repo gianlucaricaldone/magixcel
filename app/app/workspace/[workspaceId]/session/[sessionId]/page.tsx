@@ -161,6 +161,45 @@ export default function SessionPage() {
     }
   };
 
+  const handleEditFilters = () => {
+    if (!currentView) return;
+
+    // Load the current view's filters into the filter store
+    useFilterStore.getState().loadView(currentView.id);
+
+    // Open the filter builder modal
+    setShowFilterBuilder(true);
+  };
+
+  const handleCloseFilterBuilder = async () => {
+    setShowFilterBuilder(false);
+
+    // If we have a current view, save the updated filters
+    if (currentView) {
+      const filterConfig = getFilterConfig();
+
+      try {
+        const response = await fetch(`/api/views/${currentView.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filter_config: JSON.stringify(filterConfig),
+          }),
+        });
+
+        const result = await response.json();
+        if (result.success) {
+          // Reload views to get updated data
+          await loadViews();
+          // Update current view
+          setCurrentView(result.view);
+        }
+      } catch (error) {
+        console.error('Error updating view filters:', error);
+      }
+    }
+  };
+
   // Keyboard shortcuts
   useKeyboardShortcuts([
     {
@@ -195,7 +234,7 @@ export default function SessionPage() {
       handler: (e) => {
         e.preventDefault();
         if (showFilterBuilder) {
-          setShowFilterBuilder(false);
+          handleCloseFilterBuilder();
         } else if (showSavePreset) {
           setShowSavePreset(false);
         } else if (showKeyboardShortcuts) {
@@ -485,6 +524,7 @@ export default function SessionPage() {
             onCreateView={handleCreateView}
             onUpdateView={handleUpdateView}
             onDeleteView={handleDeleteView}
+            onEditFilters={handleEditFilters}
             chartCounts={chartCounts}
           />
         )}
@@ -504,20 +544,31 @@ export default function SessionPage() {
       )}
 
       {/* Filter Builder Modal */}
-      <Dialog open={showFilterBuilder} onOpenChange={setShowFilterBuilder}>
+      <Dialog
+        open={showFilterBuilder}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseFilterBuilder();
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>Build Advanced Filters</DialogTitle>
+            <DialogTitle>
+              {currentView ? `Edit Filters - ${currentView.name}` : 'Build Advanced Filters'}
+            </DialogTitle>
             <DialogDescription>
-              Create complex filter conditions with groups and combinators
+              {currentView
+                ? 'Modify the filter conditions for this view'
+                : 'Create complex filter conditions with groups and combinators'}
             </DialogDescription>
           </DialogHeader>
           <div className="flex-1 overflow-y-auto py-4">
             <FilterBuilder columns={columns} />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowFilterBuilder(false)}>
-              Close
+            <Button variant="outline" onClick={handleCloseFilterBuilder}>
+              {currentView ? 'Save & Close' : 'Close'}
             </Button>
           </DialogFooter>
         </DialogContent>

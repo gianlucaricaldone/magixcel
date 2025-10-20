@@ -7,7 +7,7 @@ import { ViewDashboard } from '@/components/charts/ViewDashboard';
 import { TableStatsBar } from '@/components/dashboard/TableStatsBar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Database, BarChart3, MoreVertical, Check, Loader2 } from 'lucide-react';
+import { Database, BarChart3, MoreVertical, Check, Loader2, Filter } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,7 @@ interface ActiveViewPanelProps {
   columnCount: number;
   onUpdateView: (updates: Partial<IView>) => void;
   onDeleteView?: () => void;
+  onEditFilters?: () => void;
   lastSaved?: Date;
 }
 
@@ -35,6 +36,7 @@ export function ActiveViewPanel({
   columnCount,
   onUpdateView,
   onDeleteView,
+  onEditFilters,
   lastSaved,
 }: ActiveViewPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('data');
@@ -206,9 +208,20 @@ export function ActiveViewPanel({
 
               {/* Meta Info */}
               <div className="flex items-center gap-3 mt-3">
-                <Badge variant="outline" className="text-xs">
-                  {filterCount} {filterCount === 1 ? 'filter' : 'filters'}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="text-xs">
+                    {filterCount} {filterCount === 1 ? 'filter' : 'filters'}
+                  </Badge>
+                  {onEditFilters && (
+                    <button
+                      onClick={onEditFilters}
+                      className="text-xs text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
+                    >
+                      <Filter className="h-3 w-3" />
+                      Edit
+                    </button>
+                  )}
+                </div>
                 <Badge variant="outline" className="text-xs">
                   {data.length} rows
                 </Badge>
