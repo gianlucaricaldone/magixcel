@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { IView } from '@/types/database';
 import { DataTable } from '@/components/table/DataTable';
 import { ViewDashboard } from '@/components/charts/ViewDashboard';
 import { TableStatsBar } from '@/components/dashboard/TableStatsBar';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Database, BarChart3, MoreVertical, Check } from 'lucide-react';
+import { Database, BarChart3, MoreVertical, Check, Loader2 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,11 +40,77 @@ export function ActiveViewPanel({
   const [isEditingDescription, setIsEditingDescription] = useState(false);
   const [editedName, setEditedName] = useState(view.name);
   const [editedDescription, setEditedDescription] = useState(view.description || '');
+  const [isSaving, setIsSaving] = useState(false);
 
   const filterConfig = JSON.parse(view.filter_config || '{"filters": [], "combinator": "AND"}');
   const filterCount = filterConfig.filters?.length || 0;
 
+  // Auto-save timers
+  const nameTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const descriptionTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Sync local state when view changes
+  useEffect(() => {
+    setEditedName(view.name);
+    setEditedDescription(view.description || '');
+  }, [view.id, view.name, view.description]);
+
+  // Auto-save name changes (debounced)
+  useEffect(() => {
+    if (!isEditingName) return;
+
+    // Clear previous timer
+    if (nameTimerRef.current) {
+      clearTimeout(nameTimerRef.current);
+    }
+
+    // Set new timer for auto-save
+    nameTimerRef.current = setTimeout(() => {
+      if (editedName.trim() && editedName.trim() !== view.name) {
+        setIsSaving(true);
+        onUpdateView({ name: editedName.trim() });
+        setTimeout(() => setIsSaving(false), 500);
+      }
+    }, 2000); // Save after 2 seconds of inactivity
+
+    return () => {
+      if (nameTimerRef.current) {
+        clearTimeout(nameTimerRef.current);
+      }
+    };
+  }, [editedName, isEditingName, view.name, onUpdateView]);
+
+  // Auto-save description changes (debounced)
+  useEffect(() => {
+    if (!isEditingDescription) return;
+
+    // Clear previous timer
+    if (descriptionTimerRef.current) {
+      clearTimeout(descriptionTimerRef.current);
+    }
+
+    // Set new timer for auto-save
+    descriptionTimerRef.current = setTimeout(() => {
+      if (editedDescription !== view.description) {
+        setIsSaving(true);
+        onUpdateView({ description: editedDescription });
+        setTimeout(() => setIsSaving(false), 500);
+      }
+    }, 2000); // Save after 2 seconds of inactivity
+
+    return () => {
+      if (descriptionTimerRef.current) {
+        clearTimeout(descriptionTimerRef.current);
+      }
+    };
+  }, [editedDescription, isEditingDescription, view.description, onUpdateView]);
+
   const handleSaveName = () => {
+    // Clear auto-save timer
+    if (nameTimerRef.current) {
+      clearTimeout(nameTimerRef.current);
+    }
+
     if (editedName.trim() !== view.name) {
       onUpdateView({ name: editedName.trim() });
     }
@@ -52,6 +118,11 @@ export function ActiveViewPanel({
   };
 
   const handleSaveDescription = () => {
+    // Clear auto-save timer
+    if (descriptionTimerRef.current) {
+      clearTimeout(descriptionTimerRef.current);
+    }
+
     if (editedDescription !== view.description) {
       onUpdateView({ description: editedDescription });
     }
@@ -139,11 +210,16 @@ export function ActiveViewPanel({
                 <Badge variant="outline" className="text-xs">
                   {data.length} rows
                 </Badge>
-                {lastSaved && (
+                {isSaving ? (
+                  <span className="text-xs text-blue-600 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Saving...
+                  </span>
+                ) : lastSaved ? (
                   <span className="text-xs text-slate-500">
                     ✓ Saved {new Date(lastSaved).toLocaleTimeString()}
                   </span>
-                )}
+                ) : null}
               </div>
             </div>
 
