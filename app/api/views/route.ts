@@ -13,8 +13,14 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category') || undefined;
     const sessionId = searchParams.get('sessionId') || undefined;
     const sheetName = searchParams.get('sheetName') || undefined;
+    const workspaceId = searchParams.get('workspaceId') || undefined;
 
     let views = await db.listViews(sessionId, category);
+
+    // Filter by workspace if provided
+    if (workspaceId) {
+      views = views.filter((view) => view.workspace_id === workspaceId);
+    }
 
     // Filter by sheet name if provided
     if (sheetName !== undefined) {
@@ -48,6 +54,7 @@ export async function POST(request: NextRequest) {
       name,
       description,
       category,
+      workspaceId,
       sessionId,
       sheetName,
       filterConfig,
@@ -61,6 +68,13 @@ export async function POST(request: NextRequest) {
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
         { success: false, error: 'Name is required and must be a string' },
+        { status: 400 }
+      );
+    }
+
+    if (!workspaceId || typeof workspaceId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Workspace ID is required' },
         { status: 400 }
       );
     }
@@ -116,6 +130,7 @@ export async function POST(request: NextRequest) {
       name,
       description: description || '',
       category: category || 'Custom',
+      workspace_id: workspaceId,
       session_id: bindToSession && sessionId ? sessionId : undefined,
       sheet_name: sheetName || null,
       filter_config: JSON.stringify(filterConfig),

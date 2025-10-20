@@ -41,7 +41,7 @@ interface FilterState {
   getFilterConfig: () => IFilterConfig;
 
   // View Actions
-  loadViews: (sessionId?: string, sheetName?: string | null) => Promise<void>;
+  loadViews: (workspaceId?: string, sessionId?: string, sheetName?: string | null) => Promise<void>;
   saveView: (
     name: string,
     options?: {
@@ -50,6 +50,7 @@ interface FilterState {
       viewType?: ViewType;
       isPublic?: boolean;
       bindToSession?: boolean;
+      workspaceId?: string;
       sessionId?: string;
       snapshotData?: any[];
     }
@@ -308,10 +309,11 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   },
 
   // View Actions
-  loadViews: async (sessionId, sheetName) => {
+  loadViews: async (workspaceId, sessionId, sheetName) => {
     set({ viewsLoading: true });
     try {
       const params = new URLSearchParams();
+      if (workspaceId) params.append('workspaceId', workspaceId);
       if (sessionId) params.append('sessionId', sessionId);
       if (sheetName !== undefined) params.append('sheetName', sheetName || '');
 
@@ -334,6 +336,10 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     const state = get();
     const filterConfig = state.getFilterConfig();
 
+    if (!options.workspaceId) {
+      return { success: false, error: 'Workspace ID is required' };
+    }
+
     try {
       const response = await fetch('/api/views', {
         method: 'POST',
@@ -347,6 +353,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
           snapshotData: options.snapshotData,
           isPublic: options.isPublic || false,
           bindToSession: options.bindToSession || false,
+          workspaceId: options.workspaceId,
           sessionId: options.sessionId,
           sheetName: state.activeSheet, // Include current sheet name
         }),
@@ -357,7 +364,7 @@ export const useFilterStore = create<FilterState>((set, get) => ({
       if (result.success) {
         // Reload views to get updated list
         const currentState = get();
-        await get().loadViews(options.sessionId, currentState.activeSheet);
+        await get().loadViews(options.workspaceId, options.sessionId, currentState.activeSheet);
         set({ currentViewId: result.view.id });
         return {
           success: true,

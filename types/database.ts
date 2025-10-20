@@ -63,6 +63,7 @@ export interface IView {
   name: string;
   description?: string;
   category: string;
+  workspace_id: string; // Workspace this view belongs to
   session_id?: string; // Optional: link view to specific session
   sheet_name?: string | null; // Sheet name for multi-sheet files (Excel); null for CSV
   filter_config: string; // JSON string of IFilterConfig

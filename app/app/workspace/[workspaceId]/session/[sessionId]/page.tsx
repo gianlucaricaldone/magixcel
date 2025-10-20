@@ -82,10 +82,10 @@ export default function SessionPage() {
 
   // Reload views when active sheet changes
   useEffect(() => {
-    if (sessionId) {
-      loadViews(sessionId, activeSheet);
+    if (workspaceId && sessionId) {
+      loadViews(workspaceId, sessionId, activeSheet);
     }
-  }, [sessionId, activeSheet, loadViews]);
+  }, [workspaceId, sessionId, activeSheet, loadViews]);
 
   // Load chart counts for all views
   useEffect(() => {
@@ -134,7 +134,7 @@ export default function SessionPage() {
       const result = await response.json();
       if (result.success) {
         // Reload views for current sheet
-        await loadViews(sessionId, activeSheet);
+        await loadViews(workspaceId, sessionId, activeSheet);
         // Update current view if it's the one being edited
         if (currentView?.id === viewId) {
           setCurrentView(result.view);
@@ -158,7 +158,7 @@ export default function SessionPage() {
           setCurrentView(null);
         }
         // Reload views for current sheet
-        await loadViews(sessionId, activeSheet);
+        await loadViews(workspaceId, sessionId, activeSheet);
       } else {
         alert(result.error || 'Failed to delete view');
       }
@@ -197,7 +197,7 @@ export default function SessionPage() {
         const result = await response.json();
         if (result.success) {
           // Reload views to get updated data for current sheet
-          await loadViews(sessionId, activeSheet);
+          await loadViews(workspaceId, sessionId, activeSheet);
           // Update current view
           setCurrentView(result.view);
         }
@@ -422,6 +422,8 @@ export default function SessionPage() {
     const result = await saveView(presetName, {
       description: presetDescription,
       category: presetCategory,
+      workspaceId: workspaceId,
+      sessionId: sessionId,
     });
 
     if (result.success && result.view) {
@@ -432,7 +434,7 @@ export default function SessionPage() {
       setShowSavePreset(false);
 
       // Reload views to update the list for current sheet
-      await loadViews(sessionId, activeSheet);
+      await loadViews(workspaceId, sessionId, activeSheet);
 
       // Set as current view
       setCurrentView(result.view);
