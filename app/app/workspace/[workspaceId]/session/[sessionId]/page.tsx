@@ -1,20 +1,19 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
 import { useDataStore } from '@/stores/data-store';
 import { useFilterStore } from '@/stores/filter-store';
-import { DataTable } from '@/components/table/DataTable';
-import { FilterBuilder } from '@/components/filters/FilterBuilder';
 import { TopBar } from '@/components/dashboard/TopBar';
-import { CollapsibleSidebar } from '@/components/dashboard/CollapsibleSidebar';
-import { FilterPanel } from '@/components/dashboard/FilterPanel';
-import { PresetManager } from '@/components/dashboard/PresetManager';
+import { TabNavigation, TabType } from '@/components/dashboard/TabNavigation';
 import { StatusBar } from '@/components/dashboard/StatusBar';
 import { KeyboardShortcutsHelp } from '@/components/dashboard/KeyboardShortcutsHelp';
-import { TableStatsBar } from '@/components/dashboard/TableStatsBar';
 import { SheetTabs } from '@/components/dashboard/SheetTabs';
+import { ExplorerTab } from '@/components/tabs/ExplorerTab';
+import { ViewsTab } from '@/components/tabs/ViewsTab';
+import { AITab } from '@/components/tabs/AITab';
+import { FilterBuilder } from '@/components/filters/FilterBuilder';
 import {
   Dialog,
   DialogContent,
@@ -29,10 +28,12 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
 import { exportToCSV, exportToExcel, exportToExcelMultiSheet, exportToJSON, getExportFilename } from '@/lib/export/exportData';
 import { IFileMetadata } from '@/types';
+import { IView } from '@/types/database';
 
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
   const workspaceId = params.workspaceId as string;
 
@@ -46,6 +47,21 @@ export default function SessionPage() {
   const [workspaceName, setWorkspaceName] = useState<string>('');
   const [sessionName, setSessionName] = useState<string>('');
 
+  // Tab navigation state - Read from URL or default to 'explorer'
+  const initialTab = (searchParams.get('tab') as TabType) || 'explorer';
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+  const [currentView, setCurrentView] = useState<IView | null>(null);
+  const [chartCounts, setChartCounts] = useState<Record<string, number>>({});
+
+  // Handle tab change with URL update
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    // Update URL without reload
+    const currentPath = window.location.pathname;
+    const newUrl = `${currentPath}?tab=${tab}`;
+    window.history.pushState({}, '', newUrl);
+  };
+
   // Modals state
   const [showFilterBuilder, setShowFilterBuilder] = useState(false);
   const [showSavePreset, setShowSavePreset] = useState(false);
@@ -56,6 +72,67 @@ export default function SessionPage() {
 
   // Refs
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Load all views on mount
+  const { views } = useFilterStore();
+
+  // Load chart counts for all views
+  useEffect(() => {
+    const loadAllChartCounts = async () => {
+      const counts: Record<string, number> = {};
+      for (const view of views) {
+        try {
+          const response = await fetch(`/api/views/${view.id}/charts`);
+          const result = await response.json();
+          if (result.success) {
+            counts[view.id] = result.charts?.length || 0;
+          }
+        } catch (error) {
+          console.error(`Error loading chart count for view ${view.id}:`, error);
+        }
+      }
+      setChartCounts(counts);
+    };
+
+    if (views.length > 0) {
+      loadAllChartCounts();
+    }
+  }, [views]);
+
+  // Handlers for Views tab
+  const handleSelectView = (view: IView) => {
+    setCurrentView(view);
+    // Load the view's filters
+    useFilterStore.getState().loadView(view.id);
+  };
+
+  const handleCreateView = () => {
+    // Switch to Explorer tab to create view with filters
+    setActiveTab('explorer');
+    setShowSavePreset(true);
+  };
+
+  const handleUpdateView = async (viewId: string, updates: Partial<IView>) => {
+    try {
+      const response = await fetch(`/api/views/${viewId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        // Reload views
+        await loadViews();
+        // Update current view if it's the one being edited
+        if (currentView?.id === viewId) {
+          setCurrentView(result.view);
+        }
+      }
+    } catch (error) {
+      console.error('Error updating view:', error);
+    }
+  };
 
   // Keyboard shortcuts
   useKeyboardShortcuts([
@@ -274,7 +351,7 @@ export default function SessionPage() {
       category: presetCategory,
     });
 
-    if (result.success) {
+    if (result.success && result.view) {
       // Reset form and close dialog
       setPresetName('');
       setPresetDescription('');
@@ -283,6 +360,12 @@ export default function SessionPage() {
 
       // Reload views to update the list
       await loadViews();
+
+      // Set as current view
+      setCurrentView(result.view);
+
+      // Switch to Views tab to show the newly created view
+      setActiveTab('views');
     } else {
       alert(result.error || 'Failed to save view');
     }
@@ -344,48 +427,53 @@ export default function SessionPage() {
         searchInputRef={searchInputRef}
       />
 
-      {/* Main Layout */}
+      {/* Tab Navigation */}
+      <TabNavigation
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        viewCount={views.length}
+      />
+
+      {/* Main Layout - Conditional based on active tab */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar - Collapsible */}
-        <CollapsibleSidebar
-          filterPanel={
-            <FilterPanel
-              onOpenFilterBuilder={() => setShowFilterBuilder(true)}
-            />
-          }
-          presetsPanel={
-            <PresetManager onSavePreset={() => setShowSavePreset(true)} />
-          }
-        />
-
-        {/* Main Content - Data Table */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Table Container - Can scroll */}
-          <div className="flex-1 min-h-0 overflow-hidden">
-            <div className="h-full bg-white overflow-hidden flex flex-col">
-              {/* Stats Bar */}
-              <TableStatsBar
-                totalRows={data.length}
-                totalColumns={columnCount}
-                filteredRows={filteredData.length}
-              />
-              {/* Table */}
-              <div className="flex-1 overflow-hidden">
-                <DataTable columns={columns} />
-              </div>
-            </div>
-          </div>
-
-          {/* Sheet Tabs - Excel only - Always visible at bottom */}
-          <SheetTabs />
-
-          {/* StatusBar - Fixed at bottom */}
-          <StatusBar
-            filteredCount={filteredData.length}
-            totalCount={data.length}
+        {activeTab === 'explorer' && (
+          <ExplorerTab
+            data={data}
+            filteredData={filteredData}
+            columns={columns}
+            columnCount={columnCount}
+            onOpenFilterBuilder={() => setShowFilterBuilder(true)}
+            onSaveAsView={() => setShowSavePreset(true)}
           />
-        </div>
+        )}
+
+        {activeTab === 'views' && (
+          <ViewsTab
+            views={views}
+            currentView={currentView}
+            data={filteredData}
+            columns={columns}
+            columnCount={columnCount}
+            onSelectView={handleSelectView}
+            onCreateView={handleCreateView}
+            onUpdateView={handleUpdateView}
+            chartCounts={chartCounts}
+          />
+        )}
+
+        {activeTab === 'ai' && <AITab />}
       </div>
+
+      {/* Sheet Tabs - Excel only - Always visible at bottom */}
+      {sheets.length > 0 && <SheetTabs />}
+
+      {/* StatusBar - Fixed at bottom */}
+      {activeTab === 'explorer' && (
+        <StatusBar
+          filteredCount={filteredData.length}
+          totalCount={data.length}
+        />
+      )}
 
       {/* Filter Builder Modal */}
       <Dialog open={showFilterBuilder} onOpenChange={setShowFilterBuilder}>

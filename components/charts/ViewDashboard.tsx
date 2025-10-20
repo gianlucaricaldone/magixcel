@@ -19,18 +19,33 @@ interface ViewDashboardProps {
   view: IView;
   data: any[];
   columns: string[];
+  isTemporary?: boolean; // If true, charts are stored in memory only
+  temporaryCharts?: ViewChart[];
+  onTemporaryChartsChange?: (charts: ViewChart[]) => void;
 }
 
-export function ViewDashboard({ view, data, columns }: ViewDashboardProps) {
+export function ViewDashboard({
+  view,
+  data,
+  columns,
+  isTemporary = false,
+  temporaryCharts = [],
+  onTemporaryChartsChange
+}: ViewDashboardProps) {
   const [charts, setCharts] = useState<ViewChart[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddingChart, setIsAddingChart] = useState(false);
   const [editingChart, setEditingChart] = useState<ViewChart | null>(null);
 
-  // Load charts
+  // Load charts - skip API call if temporary
   useEffect(() => {
-    loadCharts();
-  }, [view.id]);
+    if (isTemporary) {
+      setCharts(temporaryCharts);
+      setIsLoading(false);
+    } else {
+      loadCharts();
+    }
+  }, [view.id, isTemporary, temporaryCharts]);
 
   const loadCharts = async () => {
     setIsLoading(true);
@@ -49,6 +64,46 @@ export function ViewDashboard({ view, data, columns }: ViewDashboardProps) {
   };
 
   const handleSaveChart = async (chartConfig: any) => {
+    if (isTemporary) {
+      // Handle temporary charts (in-memory only)
+      if (editingChart) {
+        // Update existing temporary chart
+        const updatedCharts = charts.map(c =>
+          c.id === editingChart.id
+            ? {
+                ...c,
+                title: chartConfig.title,
+                config: JSON.stringify(chartConfig),
+                size: chartConfig.size || 'medium',
+                updated_at: new Date().toISOString(),
+              }
+            : c
+        );
+        setCharts(updatedCharts);
+        onTemporaryChartsChange?.(updatedCharts);
+        setEditingChart(null);
+      } else {
+        // Create new temporary chart
+        const newChart: ViewChart = {
+          id: `temp_${Date.now()}`,
+          view_id: view.id,
+          title: chartConfig.title,
+          chart_type: chartConfig.type,
+          config: JSON.stringify(chartConfig),
+          size: chartConfig.size || 'medium',
+          display_order: charts.length,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+        const updatedCharts = [...charts, newChart];
+        setCharts(updatedCharts);
+        onTemporaryChartsChange?.(updatedCharts);
+        setIsAddingChart(false);
+      }
+      return;
+    }
+
+    // Handle persisted charts (API calls)
     try {
       if (editingChart) {
         // Update existing chart
@@ -97,6 +152,15 @@ export function ViewDashboard({ view, data, columns }: ViewDashboardProps) {
       return;
     }
 
+    if (isTemporary) {
+      // Handle temporary charts
+      const updatedCharts = charts.filter(c => c.id !== chartId);
+      setCharts(updatedCharts);
+      onTemporaryChartsChange?.(updatedCharts);
+      return;
+    }
+
+    // Handle persisted charts
     try {
       const response = await fetch(`/api/views/${view.id}/charts/${chartId}`, {
         method: 'DELETE',
@@ -127,6 +191,11 @@ export function ViewDashboard({ view, data, columns }: ViewDashboardProps) {
               <BarChart3 className="h-3 w-3" />
               {charts.length} {charts.length === 1 ? 'chart' : 'charts'}
             </Badge>
+            {isTemporary && charts.length > 0 && (
+              <Badge variant="secondary" className="bg-amber-100 text-amber-800 border-amber-300">
+                Temporary
+              </Badge>
+            )}
             <Badge variant="secondary">
               {data.length} rows
             </Badge>
@@ -143,6 +212,21 @@ export function ViewDashboard({ view, data, columns }: ViewDashboardProps) {
           <p className="text-sm text-slate-600 mt-2">{view.description}</p>
         )}
       </div>
+
+      {/* Temporary Charts Info Banner */}
+      {isTemporary && charts.length > 0 && (
+        <div className="bg-amber-50 border-b border-amber-200 px-6 py-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-amber-600">ℹ️</span>
+              <span className="text-amber-900">
+                These charts are temporary and will be lost when you leave this page.{' '}
+                <strong>Save this view to keep them permanently.</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Charts Grid */}
       <div className="flex-1 p-6 overflow-auto bg-slate-50">

@@ -8,9 +8,10 @@ import { IView } from '@/types/database';
 
 interface PresetManagerProps {
   onSavePreset: () => void;
+  onViewLoaded?: (view: IView) => void; // Callback when a view is loaded
 }
 
-export function PresetManager({ onSavePreset }: PresetManagerProps) {
+export function PresetManager({ onSavePreset, onViewLoaded }: PresetManagerProps) {
   const { views, viewsLoading, loadViews, loadView, updateView, deleteView, getFilterConfig } =
     useFilterStore();
 
@@ -151,7 +152,10 @@ export function PresetManager({ onSavePreset }: PresetManagerProps) {
                         {/* View Name & Description */}
                         <div
                           className="cursor-pointer mb-2"
-                          onClick={() => loadView(view.id)}
+                          onClick={() => {
+                            loadView(view.id);
+                            onViewLoaded?.(view); // Notify parent that view was loaded
+                          }}
                         >
                           <div className="text-sm font-medium text-slate-900 group-hover:text-blue-700">
                             {view.name}

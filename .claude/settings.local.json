@@ -21,7 +21,10 @@
       "Bash(npm install chart.js react-chartjs-2 chartjs-plugin-zoom chartjs-plugin-datalabels date-fns)",
       "Bash(npm install @radix-ui/react-select @radix-ui/react-checkbox)",
       "Bash(find app/api/views/[id]/{charts,suggestions} -type f -name \"*.ts\" -exec perl -pi -e 's/viewId/id/g' {} ;)",
-      "Bash(perl -pi -e 's/params\\.viewId/params.id/g; s/viewId as string/id as string/g' app/app/view/[id]/page.tsx)"
+      "Bash(perl -pi -e 's/params\\.viewId/params.id/g; s/viewId as string/id as string/g' app/app/view/[id]/page.tsx)",
+      "Bash(npm run build)",
+      "Bash(npm run dev)",
+      "Bash(git add -A)"
     ],
     "deny": [],
     "ask": []

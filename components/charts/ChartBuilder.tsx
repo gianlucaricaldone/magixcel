@@ -63,15 +63,16 @@ export function ChartBuilder({
   // Configuration state
   const [chartType, setChartType] = useState<ChartType>(initialConfig?.type || 'bar');
   const [title, setTitle] = useState(initialConfig?.title || '');
-  const [xAxis, setXAxis] = useState(initialConfig?.xAxis || '');
-  const [yAxis, setYAxis] = useState(initialConfig?.yAxis || '');
+  // For pie/doughnut charts, labels/values are stored instead of xAxis/yAxis
+  const [xAxis, setXAxis] = useState(initialConfig?.xAxis || initialConfig?.labels || '');
+  const [yAxis, setYAxis] = useState(initialConfig?.yAxis || initialConfig?.values || '');
   const [groupBy, setGroupBy] = useState(initialConfig?.groupBy || '');
   const [aggregation, setAggregation] = useState(initialConfig?.aggregation || 'sum');
   const [colorScheme, setColorScheme] = useState(initialConfig?.colorScheme || 'blue');
   const [showValues, setShowValues] = useState(initialConfig?.showValues || false);
   const [enableZoom, setEnableZoom] = useState(initialConfig?.enableZoom || false);
   const [stacked, setStacked] = useState(initialConfig?.stacked || false);
-  const [size, setSize] = useState<'small' | 'medium' | 'large' | 'full'>('medium');
+  const [size, setSize] = useState<'small' | 'medium' | 'large' | 'full'>(initialConfig?.size || 'medium');
 
   // Auto-apply top suggestion if no initial config
   useEffect(() => {
@@ -274,19 +275,28 @@ export function ChartBuilder({
           {!['pie', 'doughnut'].includes(chartType) && (
             <div>
               <Label className="text-sm font-medium">Group By (Optional)</Label>
-              <Select value={groupBy} onValueChange={setGroupBy}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">None</SelectItem>
-                  {analysis.categoricalColumns.map((col) => (
-                    <SelectItem key={col} value={col}>
-                      {col}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <Select value={groupBy || undefined} onValueChange={setGroupBy}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue placeholder="None - No grouping" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {analysis.categoricalColumns.map((col) => (
+                      <SelectItem key={col} value={col}>
+                        {col}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {groupBy && (
+                  <button
+                    onClick={() => setGroupBy('')}
+                    className="text-xs text-blue-600 hover:text-blue-700"
+                  >
+                    Clear grouping
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>
