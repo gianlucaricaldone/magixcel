@@ -4,9 +4,17 @@ import { useState, useEffect } from 'react';
 import { ViewChart } from '@/types/charts';
 import { IView } from '@/types/database';
 import { ChartDisplay } from '@/components/charts/ChartDisplay';
-import { Loader2, BarChart3, Plus, Sparkles } from 'lucide-react';
+import { ChartBuilder } from '@/components/charts/ChartBuilder';
+import { Loader2, BarChart3, Plus, Sparkles, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 interface AggregatedViewChartsProps {
   activeViews: IView[];
@@ -26,6 +34,9 @@ export function AggregatedViewCharts({
 }: AggregatedViewChartsProps) {
   const [viewCharts, setViewCharts] = useState<ViewWithCharts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedViewForChart, setSelectedViewForChart] = useState<IView | null>(null);
+  const [isViewSelectorOpen, setIsViewSelectorOpen] = useState(false);
+  const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
 
   // Load charts for all active views
   useEffect(() => {
@@ -69,6 +80,71 @@ export function AggregatedViewCharts({
     }
   }, [activeViews]);
 
+  // Handlers for chart creation
+  const handleAddChartClick = () => {
+    if (activeViews.length === 1) {
+      // Only 1 view selected → open ChartBuilder directly
+      setSelectedViewForChart(activeViews[0]);
+      setIsChartBuilderOpen(true);
+    } else {
+      // Multiple views → show view selector first
+      setIsViewSelectorOpen(true);
+    }
+  };
+
+  const handleViewSelected = (view: IView) => {
+    setSelectedViewForChart(view);
+    setIsViewSelectorOpen(false);
+    setIsChartBuilderOpen(true);
+  };
+
+  const handleSaveChart = async (chartConfig: any) => {
+    if (!selectedViewForChart) return;
+
+    try {
+      const response = await fetch(`/api/views/${selectedViewForChart.id}/charts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: chartConfig.title,
+          chartType: chartConfig.type,
+          config: JSON.stringify(chartConfig),
+          size: chartConfig.size || 'medium',
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Reload charts to show the new one
+        const updatedCharts = await Promise.all(
+          activeViews.map(async (view) => {
+            try {
+              const res = await fetch(`/api/views/${view.id}/charts`);
+              const data = await res.json();
+              return { view, charts: data.success ? data.charts : [] };
+            } catch {
+              return { view, charts: [] };
+            }
+          })
+        );
+        setViewCharts(updatedCharts);
+        setIsChartBuilderOpen(false);
+        setSelectedViewForChart(null);
+      } else {
+        alert(`Failed to create chart: ${result.error?.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error creating chart:', error);
+      alert('Failed to create chart. Please try again.');
+    }
+  };
+
+  const handleCancelChart = () => {
+    setIsChartBuilderOpen(false);
+    setSelectedViewForChart(null);
+  };
+
   // Calculate total charts count
   const totalCharts = viewCharts.reduce((sum, vc) => sum + vc.charts.length, 0);
 
@@ -102,12 +178,7 @@ export function AggregatedViewCharts({
           {/* Action Buttons */}
           {activeViews.length > 0 && (
             <div className="flex gap-3 justify-center">
-              <Button
-                onClick={() => {
-                  // TODO: Open chart builder modal
-                  console.log('Add Chart clicked');
-                }}
-              >
+              <Button onClick={handleAddChartClick}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Chart
               </Button>
@@ -153,10 +224,7 @@ export function AggregatedViewCharts({
             <div className="flex gap-2">
               <Button
                 size="sm"
-                onClick={() => {
-                  // TODO: Open chart builder modal
-                  console.log('Add Chart clicked');
-                }}
+                onClick={handleAddChartClick}
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Chart
@@ -229,6 +297,65 @@ export function AggregatedViewCharts({
           </div>
         );
       })}
+
+      {/* View Selector Dialog */}
+      <Dialog open={isViewSelectorOpen} onOpenChange={setIsViewSelectorOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select View for New Chart</DialogTitle>
+            <DialogDescription>
+              Choose which view you want to add this chart to
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 py-4">
+            {activeViews.map((view) => (
+              <button
+                key={view.id}
+                onClick={() => handleViewSelected(view)}
+                className="w-full p-4 border rounded-lg hover:bg-slate-50 hover:border-blue-500 transition-all text-left group"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <h4 className="font-medium text-slate-900 group-hover:text-blue-600">
+                      {view.name}
+                    </h4>
+                    {view.description && (
+                      <p className="text-sm text-slate-600 mt-1">
+                        {view.description}
+                      </p>
+                    )}
+                  </div>
+                  <Check className="h-5 w-5 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ChartBuilder Dialog */}
+      <Dialog open={isChartBuilderOpen} onOpenChange={setIsChartBuilderOpen}>
+        <DialogContent className="max-w-7xl h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              Create Chart for &quot;{selectedViewForChart?.name}&quot;
+            </DialogTitle>
+            <DialogDescription>
+              Configure your chart settings and preview the result
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto">
+            {selectedViewForChart && (
+              <ChartBuilder
+                data={data}
+                columns={columns}
+                onSave={handleSaveChart}
+                onCancel={handleCancelChart}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
