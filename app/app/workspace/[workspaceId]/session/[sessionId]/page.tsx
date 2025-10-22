@@ -1,20 +1,18 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState, useMemo } from 'react';
+import { useParams, useRouter } from 'next/navigation';
 import { useSessionStore } from '@/stores/session-store';
 import { useDataStore } from '@/stores/data-store';
 import { useFilterStore } from '@/stores/filter-store';
 import { TopBar } from '@/components/dashboard/TopBar';
-import { TabNavigation, TabType } from '@/components/dashboard/TabNavigation';
 import { StatusBar } from '@/components/dashboard/StatusBar';
-import { KeyboardShortcutsHelp } from '@/components/dashboard/KeyboardShortcutsHelp';
 import { SheetTabs } from '@/components/dashboard/SheetTabs';
-import { ExplorerTab } from '@/components/tabs/ExplorerTab';
-import { ViewsTab } from '@/components/tabs/ViewsTab';
-import { AITab } from '@/components/tabs/AITab';
+import { WorkspaceToolbar } from '@/components/workspace/WorkspaceToolbar';
+import { ViewSheetTabs } from '@/components/workspace/ViewSheetTabs';
+import { ViewSplitLayout } from '@/components/workspace/ViewSplitLayout';
+import { ViewPickerDialog } from '@/components/workspace/ViewPickerDialog';
 import { FilterBuilder } from '@/components/filters/FilterBuilder';
-import { CommandPalette, useCommandPalette } from '@/components/command/CommandPalette';
 import {
   Dialog,
   DialogContent,
@@ -24,739 +22,336 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { applyFilters } from '@/lib/processing/filter-engine';
-import { useDebounce } from '@/lib/hooks/useDebounce';
-import { useKeyboardShortcuts } from '@/lib/hooks/useKeyboardShortcuts';
-import { exportToCSV, exportToExcel, exportToExcelMultiSheet, exportToJSON, getExportFilename } from '@/lib/export/exportData';
-import { IFileMetadata } from '@/types';
 import { IView } from '@/types/database';
 
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
   const workspaceId = params.workspaceId as string;
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
-  const { data, setData, filteredData, setFilteredData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet, updateSheetFilteredCount } = useDataStore();
-  const { getFilterConfig, filtersBySheet, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet, clearAllFilters, saveView, loadViews } = useFilterStore();
+  const { data, setData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet } = useDataStore();
+  const { loadViews, saveView, views } = useFilterStore();
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
-  const [globalSearch, setGlobalSearch] = useState('');
-  const debouncedGlobalSearch = useDebounce(globalSearch, 300);
   const [workspaceName, setWorkspaceName] = useState<string>('');
   const [sessionName, setSessionName] = useState<string>('');
 
-  // Tab navigation state - Read from URL or default to 'explorer'
-  const initialTab = (searchParams.get('tab') as TabType) || 'explorer';
-  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
-  const [activeViewIds, setActiveViewIds] = useState<string[]>([]);
-  const [chartCounts, setChartCounts] = useState<Record<string, number>>({});
+  // New state for workspace-style UI
+  const [openViews, setOpenViews] = useState<IView[]>([]);
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const [isViewPickerOpen, setIsViewPickerOpen] = useState(false);
+  const [isFilterBuilderOpen, setIsFilterBuilderOpen] = useState(false);
+  const [showSaveViewDialog, setShowSaveViewDialog] = useState(false);
+  const [viewName, setViewName] = useState('');
+  const [viewDescription, setViewDescription] = useState('');
+  const [viewCategory, setViewCategory] = useState('Custom');
 
-  // Separate filtered data for Explorer and Views tabs
-  const [viewsFilteredData, setViewsFilteredData] = useState<any[]>([]);
+  // Columns from data
+  const columns = useMemo(() => {
+    return data.length > 0 ? Object.keys(data[0]) : [];
+  }, [data]);
 
-  // Handle tab change with URL update
-  const handleTabChange = (tab: TabType) => {
-    setActiveTab(tab);
-    // Update URL without reload
-    const currentPath = window.location.pathname;
-    const newUrl = `${currentPath}?tab=${tab}`;
-    window.history.pushState({}, '', newUrl);
-  };
+  const columnCount = columns.length;
 
-  // Modals state
-  const [showFilterBuilder, setShowFilterBuilder] = useState(false);
-  const [editingViewId, setEditingViewId] = useState<string | null>(null);
-  const [showSavePreset, setShowSavePreset] = useState(false);
-  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
-  const [presetName, setPresetName] = useState('');
-  const [presetDescription, setPresetDescription] = useState('');
-  const [presetCategory, setPresetCategory] = useState('Custom');
+  // Load workspace and session metadata
+  useEffect(() => {
+    const loadSessionData = async () => {
+      setIsLoadingSession(true);
 
-  // Command Palette (⌘K)
-  const commandPalette = useCommandPalette();
+      try {
+        // Load workspace
+        const workspaceResponse = await fetch(`/api/workspace/${workspaceId}`);
+        const workspaceResult = await workspaceResponse.json();
+        if (workspaceResult.success) {
+          setWorkspaceName(workspaceResult.workspace.name);
+        }
 
-  // Refs
-  const searchInputRef = useRef<HTMLInputElement>(null);
+        // Load session
+        const sessionResponse = await fetch(`/api/session/${sessionId}`);
+        const sessionResult = await sessionResponse.json();
 
-  // Load all views on mount and when sheet changes
-  const { views } = useFilterStore();
+        if (sessionResult.success) {
+          setSession(sessionResult.session);
+          setSessionName(sessionResult.session.name);
 
-  // Load ALL views for the workspace (not filtered by sheet - views are GLOBAL)
+          // Load data.json
+          const dataResponse = await fetch(`/api/session/${sessionId}/data`);
+          const dataResult = await dataResponse.json();
+
+          if (dataResult.success) {
+            setData(dataResult.data);
+
+            // Handle sheets (Excel files)
+            if (sessionResult.session.file_type === 'xlsx' || sessionResult.session.file_type === 'xls') {
+              try {
+                const sheetsResponse = await fetch(`/api/session/${sessionId}/sheets`);
+                const sheetsResult = await sheetsResponse.json();
+
+                if (sheetsResult.success && sheetsResult.sheets && sheetsResult.sheets.length > 0) {
+                  setSheets(sheetsResult.sheets);
+                  const firstSheet = sheetsResult.sheets[0].name;
+                  setDataActiveSheet(firstSheet);
+                }
+              } catch (error) {
+                console.warn('No sheets.json found, treating as single sheet');
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading session:', error);
+        setError('Failed to load session');
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+
+    if (sessionId && workspaceId) {
+      loadSessionData();
+    }
+  }, [sessionId, workspaceId, setSession, setData, setSheets, setDataActiveSheet, setError]);
+
+  // Load all views for this workspace/session
   useEffect(() => {
     if (workspaceId && sessionId) {
       loadViews(workspaceId, sessionId);
     }
   }, [workspaceId, sessionId, loadViews]);
 
-  // Load active views from database when session or sheet changes
+  // Auto-open "All Data" view on load
   useEffect(() => {
-    const loadActiveViews = async () => {
-      if (!sessionId) return;
-
-      try {
-        const url = new URL('/api/active-views', window.location.origin);
-        url.searchParams.set('sessionId', sessionId);
-        if (activeSheet) {
-          url.searchParams.set('sheetName', activeSheet);
-        }
-
-        const response = await fetch(url.toString());
-        const result = await response.json();
-
-        if (result.success && result.activeViews) {
-          setActiveViewIds(result.activeViews.map((av: any) => av.view_id));
-        }
-      } catch (error) {
-        console.error('Error loading active views:', error);
+    if (views.length > 0 && openViews.length === 0) {
+      const allDataView = views.find((v) => v.is_default === 1);
+      if (allDataView) {
+        setOpenViews([allDataView]);
+        setActiveViewId(allDataView.id);
       }
-    };
-
-    loadActiveViews();
-  }, [sessionId, activeSheet]);
-
-  // Load chart counts for all views
-  useEffect(() => {
-    const loadAllChartCounts = async () => {
-      const counts: Record<string, number> = {};
-      for (const view of views) {
-        try {
-          const response = await fetch(`/api/views/${view.id}/charts`);
-          const result = await response.json();
-          if (result.success) {
-            counts[view.id] = result.charts?.length || 0;
-          }
-        } catch (error) {
-          console.error(`Error loading chart count for view ${view.id}:`, error);
-        }
-      }
-      setChartCounts(counts);
-    };
-
-    if (views.length > 0) {
-      loadAllChartCounts();
     }
   }, [views]);
 
-  // Handlers for Views tab
-  const handleToggleView = async (viewId: string) => {
-    if (!sessionId) return;
+  // Get active view
+  const activeView = useMemo(() => {
+    return openViews.find((v) => v.id === activeViewId) || null;
+  }, [openViews, activeViewId]);
 
-    const isActive = activeViewIds.includes(viewId);
+  // Filter data based on active view
+  const filteredData = useMemo(() => {
+    if (!activeView) return data;
 
     try {
-      if (isActive) {
-        // Deactivate view
-        const url = new URL('/api/active-views', window.location.origin);
-        url.searchParams.set('sessionId', sessionId);
-        url.searchParams.set('viewId', viewId);
-        if (activeSheet) {
-          url.searchParams.set('sheetName', activeSheet);
-        }
-
-        await fetch(url.toString(), { method: 'DELETE' });
-
-        // Remove from active list
-        setActiveViewIds(prev => prev.filter(id => id !== viewId));
-      } else {
-        // Activate view
-        await fetch('/api/active-views', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            sessionId,
-            sheetName: activeSheet,
-            viewId,
-          }),
-        });
-
-        // Add to active list
-        setActiveViewIds(prev => [...prev, viewId]);
-      }
+      const filterConfig = JSON.parse(activeView.filter_config);
+      return applyFilters(data, filterConfig, '');
     } catch (error) {
-      console.error('Error toggling view:', error);
+      console.error('Error applying filters:', error);
+      return data;
+    }
+  }, [data, activeView]);
+
+  // Handlers
+  const handleOpenView = (view: IView) => {
+    // Check if already open
+    if (openViews.find((v) => v.id === view.id)) {
+      // Just switch to it
+      setActiveViewId(view.id);
+    } else {
+      // Add to open views
+      setOpenViews([...openViews, view]);
+      setActiveViewId(view.id);
+    }
+  };
+
+  const handleCloseView = (viewId: string) => {
+    const newOpenViews = openViews.filter((v) => v.id !== viewId);
+    setOpenViews(newOpenViews);
+
+    // If closing active view, switch to another
+    if (viewId === activeViewId) {
+      if (newOpenViews.length > 0) {
+        setActiveViewId(newOpenViews[newOpenViews.length - 1].id);
+      } else {
+        setActiveViewId(null);
+      }
     }
   };
 
   const handleCreateView = () => {
-    // Switch to Explorer tab to create view with filters
-    setActiveTab('explorer');
-    setShowSavePreset(true);
+    setIsFilterBuilderOpen(true);
   };
 
-  const handleUpdateView = async (viewId: string, updates: Partial<IView>) => {
-    try {
-      const response = await fetch(`/api/views/${viewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        // Reload ALL views for workspace (views are GLOBAL)
-        await loadViews(workspaceId, sessionId);
-      } else {
-        console.error('Update view failed:', result.error);
-      }
-    } catch (error) {
-      console.error('Error updating view:', error);
-    }
-  };
-
-  const handleDeleteView = async (viewId: string) => {
-    try {
-      const response = await fetch(`/api/views/${viewId}`, {
-        method: 'DELETE',
-      });
-
-      const result = await response.json();
-      if (result.success) {
-        // Remove from active views if it was active
-        setActiveViewIds(prev => prev.filter(id => id !== viewId));
-        // Reload ALL views for workspace (views are GLOBAL)
-        await loadViews(workspaceId, sessionId);
-      } else {
-        alert(result.error || 'Failed to delete view');
-      }
-    } catch (error) {
-      console.error('Error deleting view:', error);
-      alert('Failed to delete view');
-    }
-  };
-
-  const handleEditFilters = (viewId: string) => {
-    // Store which view we're editing
-    setEditingViewId(viewId);
-
-    // Load the view's filters into the filter store
-    useFilterStore.getState().loadView(viewId);
-
-    // Open the filter builder modal
-    setShowFilterBuilder(true);
-  };
-
-  const handleCloseFilterBuilder = async () => {
-    const viewIdToUpdate = editingViewId;
-
-    // Close modal first
-    setShowFilterBuilder(false);
-    setEditingViewId(null);
-
-    // If we were editing a view, save the updated filters
-    if (viewIdToUpdate) {
-      const filterConfig = getFilterConfig();
-
-      try {
-        const response = await fetch(`/api/views/${viewIdToUpdate}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filterConfig: filterConfig, // API expects camelCase, not snake_case
-          }),
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-          // Reload ALL views for workspace (views are GLOBAL)
-          await loadViews(workspaceId, sessionId);
-        } else {
-          console.error('Failed to save filters:', result.error);
-        }
-      } catch (error) {
-        console.error('Error updating view filters:', error);
-      }
-    }
-  };
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts([
-    {
-      key: 'f',
-      ctrlOrCmd: true,
-      handler: (e) => {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      },
-      description: 'Focus search',
-    },
-    {
-      key: 'k',
-      ctrlOrCmd: true,
-      handler: (e) => {
-        e.preventDefault();
-        setShowFilterBuilder(true);
-      },
-      description: 'Open filter builder',
-    },
-    {
-      key: 's',
-      ctrlOrCmd: true,
-      handler: (e) => {
-        e.preventDefault();
-        setShowSavePreset(true);
-      },
-      description: 'Save view',
-    },
-    {
-      key: 'Escape',
-      handler: (e) => {
-        e.preventDefault();
-        if (showFilterBuilder) {
-          handleCloseFilterBuilder();
-        } else if (showSavePreset) {
-          setShowSavePreset(false);
-        } else if (showKeyboardShortcuts) {
-          setShowKeyboardShortcuts(false);
-        } else if (globalSearch) {
-          setGlobalSearch('');
-        }
-      },
-      description: 'Close modals or clear search',
-    },
-    {
-      key: '?',
-      handler: (e) => {
-        e.preventDefault();
-        setShowKeyboardShortcuts(!showKeyboardShortcuts);
-      },
-      description: 'Toggle keyboard shortcuts help',
-    },
-  ]);
-
-  useEffect(() => {
-    if (sessionId) {
-      loadSession(sessionId);
-    }
-  }, [sessionId]);
-
-  // Auto-save filters when switching sessions or unmounting
-  useEffect(() => {
-    return () => {
-      // Cleanup: Save current filters before leaving session
-      const currentFilters = useFilterStore.getState().filtersBySheet;
-      if (sessionId && Object.keys(currentFilters).length > 0) {
-        fetch(`/api/session/${sessionId}/filters`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filtersBySheet: currentFilters }),
-        }).catch(error => console.error('Failed to save filters on cleanup:', error));
-      }
-    };
-  }, [sessionId]);
-
-  // Sync active sheet between data store and filter store
-  useEffect(() => {
-    if (activeSheet) {
-      setFilterActiveSheet(activeSheet);
-    }
-  }, [activeSheet, setFilterActiveSheet]);
-
-  // Apply Explorer filters (for Explorer tab only)
-  useEffect(() => {
-    if (data.length === 0) return;
-
-    // Apply ONLY Explorer tab filters (temporary filters)
-    const explorerFilters = getFilterConfig();
-    const filtered = applyFilters(data, explorerFilters, debouncedGlobalSearch);
-
-    setFilteredData(filtered);
-
-    // Update filtered count for active sheet (only for Explorer)
-    if (activeSheet) {
-      updateSheetFilteredCount(activeSheet, filtered.length);
-    }
-  }, [debouncedGlobalSearch, data, filtersBySheet, activeSheet, getFilterConfig, setFilteredData, updateSheetFilteredCount]);
-
-  // Apply Views filters (for Views tab only)
-  useEffect(() => {
-    if (data.length === 0) return;
-
-    let filtered = data;
-
-    // Apply each active view's filters in AND
-    if (activeViewIds.length > 0) {
-      const activeViews = views.filter(v => activeViewIds.includes(v.id));
-
-      for (const view of activeViews) {
-        try {
-          const viewFilterConfig = JSON.parse(view.filter_config);
-          // Apply view filters on already filtered data (AND logic)
-          filtered = applyFilters(filtered, viewFilterConfig, '');
-        } catch (error) {
-          console.error(`Error parsing filter config for view ${view.id}:`, error);
-        }
-      }
-    }
-
-    // Apply global search to views data as well
-    if (debouncedGlobalSearch) {
-      filtered = applyFilters(filtered, { combinator: 'AND', filters: [] }, debouncedGlobalSearch);
-    }
-
-    setViewsFilteredData(filtered);
-  }, [data, activeViewIds, views, debouncedGlobalSearch]);
-
-  const loadSession = async (id: string) => {
-    setIsLoadingSession(true);
-    setLoading(true);
-
-    try {
-      // Load workspace info
-      const workspaceResponse = await fetch(`/api/workspace/${workspaceId}`);
-      const workspaceResult = await workspaceResponse.json();
-
-      if (workspaceResult.success && workspaceResult.workspace) {
-        setWorkspaceName(workspaceResult.workspace.name);
-      }
-
-      // Load session metadata
-      const metadataResponse = await fetch(`/api/session/${id}`);
-      const metadataResult = await metadataResponse.json();
-
-      if (!metadataResult.success || !metadataResult.session) {
-        setError('Session not found');
-        router.push('/app');
-        return;
-      }
-
-      // Set session name
-      setSessionName(metadataResult.session.name);
-
-      // Load session data
-      const dataResponse = await fetch(`/api/session/${id}/data`);
-      const dataResult = await dataResponse.json();
-
-      if (!dataResult.success || !dataResult.data) {
-        setError('Failed to load session data');
-        return;
-      }
-
-      // Create metadata from session
-      const session = metadataResult.session;
-      const sessionMetadata: IFileMetadata = {
-        fileName: session.original_file_name,
-        fileSize: session.file_size,
-        fileType: session.file_type,
-        rowCount: session.row_count,
-        columnCount: session.column_count,
-        columns: Object.keys(dataResult.data[0] || {}),
-        preview: dataResult.data.slice(0, 10),
-      };
-
-      setSession(id, sessionMetadata);
-
-      // Load sheets if available (Excel files)
-      if (dataResult.sheets && dataResult.sheets.length > 0) {
-        setSheets(dataResult.sheets);
-        // Set active sheet in filter store
-        if (dataResult.sheets[0]) {
-          setFilterActiveSheet(dataResult.sheets[0].sheetName);
-        }
-      } else {
-        setData(dataResult.data);
-        // No sheets, set null for CSV files
-        setFilterActiveSheet(null);
-      }
-
-      // Clear all filters from previous session first
-      clearAllFilters();
-
-      // Restore saved filters if available
-      if (session.active_filters) {
-        try {
-          const savedFilters = JSON.parse(session.active_filters);
-          // Restore filters to filter store
-          restoreFiltersBySheet(savedFilters);
-        } catch (error) {
-          console.error('Error parsing saved filters:', error);
-        }
-      }
-    } catch (error: any) {
-      console.error('Failed to load session:', error);
-      setError(error.message || 'Failed to load session');
-      router.push('/app');
-    } finally {
-      setIsLoadingSession(false);
-      setLoading(false);
-    }
-  };
-
-  const handleExport = (format: 'csv' | 'excel' | 'json') => {
-    // Generate filename with timestamp and filter info
-    const hasFilters = sheets.length > 0 && sheets.some(sheet =>
-      sheet.filteredRowCount !== undefined && sheet.filteredRowCount !== sheet.rowCount
-    );
-    const suffix = hasFilters ? 'filtered' : 'all';
-    const filename = getExportFilename(metadata?.fileName || 'export', suffix);
-
-    // Export based on format
-    switch (format) {
-      case 'csv':
-        // CSV exports only active sheet data
-        if (!filteredData || filteredData.length === 0) {
-          alert('Nessun dato da esportare');
-          return;
-        }
-        exportToCSV(filteredData, filename);
-        break;
-      case 'excel':
-        // Excel exports all sheets with their filters
-        if (sheets.length > 1) {
-          const { filtersBySheet } = useFilterStore.getState();
-          exportToExcelMultiSheet(sheets, filtersBySheet, filename);
-        } else {
-          if (!filteredData || filteredData.length === 0) {
-            alert('Nessun dato da esportare');
-            return;
-          }
-          exportToExcel(filteredData, filename);
-        }
-        break;
-      case 'json':
-        // JSON exports only active sheet data
-        if (!filteredData || filteredData.length === 0) {
-          alert('Nessun dato da esportare');
-          return;
-        }
-        exportToJSON(filteredData, filename);
-        break;
-    }
-  };
-
-  const handleSavePreset = async () => {
-    if (!presetName.trim()) {
-      alert('Please enter a name for the view');
+  const handleSaveNewView = async () => {
+    if (!viewName.trim()) {
+      alert('Please enter a view name');
       return;
     }
 
-    const result = await saveView(presetName, {
-      description: presetDescription,
-      category: presetCategory,
-      workspaceId: workspaceId,
-      sessionId: sessionId,
-    });
-
-    if (result.success && result.view) {
-      // Reset form and close dialog
-      setPresetName('');
-      setPresetDescription('');
-      setPresetCategory('Custom');
-      setShowSavePreset(false);
-
-      // Reload ALL views for workspace (views are GLOBAL)
-      await loadViews(workspaceId, sessionId);
-
-      // Switch to Views tab to show the newly created view
-      setActiveTab('views');
-    } else {
-      alert(result.error || 'Failed to save view');
-    }
-  };
-
-  const handleSaveSession = async () => {
     try {
-      // Get current filters state from filter store
-      const { filtersBySheet } = useFilterStore.getState();
-
-      const response = await fetch(`/api/session/${sessionId}/filters`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ filtersBySheet }),
+      const filterConfig = {}; // Get from FilterBuilder
+      await saveView({
+        workspaceId,
+        sessionId,
+        name: viewName,
+        description: viewDescription,
+        category: viewCategory,
+        filterConfig,
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        alert('Sessione salvata con successo!');
-      } else {
-        alert('Errore nel salvataggio: ' + result.error.message);
-      }
+      // Reload views
+      loadViews(workspaceId, sessionId);
+      setShowSaveViewDialog(false);
+      setViewName('');
+      setViewDescription('');
+      setViewCategory('Custom');
     } catch (error) {
-      console.error('Error saving session:', error);
-      alert('Errore nel salvataggio della sessione');
+      console.error('Error saving view:', error);
+      alert('Failed to save view');
     }
   };
 
-  if (isLoadingSession || !metadata) {
+  if (isLoadingSession) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent mb-4" />
-          <p className="text-lg text-slate-600">Loading session...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+          <p className="text-slate-600">Loading session...</p>
         </div>
       </div>
     );
   }
 
-  // Get columns from active sheet or metadata
-  const activeSheetData = sheets.find(s => s.sheetName === activeSheet);
-  const columns = activeSheetData ? activeSheetData.columns : metadata.columns;
-  const columnCount = activeSheetData ? activeSheetData.columnCount : metadata.columnCount;
-
   return (
-    <div className="h-screen flex flex-col bg-slate-50">
-      {/* TopBar - Fixed */}
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      {/* TopBar */}
       <TopBar
-        fileName={metadata.fileName}
         workspaceName={workspaceName}
-        workspaceId={workspaceId}
         sessionName={sessionName}
-        onSearchChange={setGlobalSearch}
-        onSave={handleSaveSession}
-        onExport={handleExport}
-        searchInputRef={searchInputRef}
+        onNavigateBack={() => router.push(`/app/workspace/${workspaceId}`)}
       />
 
-      {/* Tab Navigation */}
-      <TabNavigation
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        viewCount={views.length}
-      />
-
-      {/* Main Layout - Conditional based on active tab */}
-      <div className="flex-1 flex overflow-hidden">
-        {activeTab === 'explorer' && (
-          <ExplorerTab
-            data={data}
-            filteredData={filteredData}
-            columns={columns}
-            columnCount={columnCount}
-            onOpenFilterBuilder={() => setShowFilterBuilder(true)}
-            onSaveAsView={() => setShowSavePreset(true)}
-          />
-        )}
-
-        {activeTab === 'views' && (
-          <ViewsTab
-            views={views}
-            activeViewIds={activeViewIds}
-            sessionId={sessionId}
-            workspaceId={workspaceId}
-            activeSheet={activeSheet}
-            data={viewsFilteredData}
-            columns={columns}
-            columnCount={columnCount}
-            onToggleView={handleToggleView}
-            onCreateView={handleCreateView}
-            onUpdateView={handleUpdateView}
-            onDeleteView={handleDeleteView}
-            onEditFilters={handleEditFilters}
-            chartCounts={chartCounts}
-          />
-        )}
-
-        {activeTab === 'ai' && <AITab />}
-      </div>
-
-      {/* Sheet Tabs - Excel only - Always visible at bottom */}
-      {sheets.length > 0 && <SheetTabs />}
-
-      {/* StatusBar - Fixed at bottom */}
-      {activeTab === 'explorer' && (
-        <StatusBar
-          filteredCount={filteredData.length}
-          totalCount={data.length}
+      {/* Sheet Tabs (for Excel files) */}
+      {sheets && sheets.length > 1 && (
+        <SheetTabs
+          sheets={sheets}
+          activeSheet={activeSheet}
+          onSheetChange={setDataActiveSheet}
         />
       )}
 
-      {/* Filter Builder Modal */}
-      <Dialog
-        open={showFilterBuilder}
-        onOpenChange={(open) => {
-          if (!open) {
-            handleCloseFilterBuilder();
-          }
-        }}
-      >
-        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
+      {/* Workspace Toolbar */}
+      <WorkspaceToolbar
+        onCreateView={handleCreateView}
+        onAddView={() => setIsViewPickerOpen(true)}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {activeView ? (
+          <ViewSplitLayout
+            view={activeView}
+            data={filteredData}
+            columns={columns}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <p className="text-slate-600 mb-4">No view selected</p>
+              <Button onClick={() => setIsViewPickerOpen(true)}>
+                Select a View
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* View Sheet Tabs */}
+      <ViewSheetTabs
+        openViews={openViews}
+        activeViewId={activeViewId}
+        onSelectView={setActiveViewId}
+        onCloseView={handleCloseView}
+        onAddView={() => setIsViewPickerOpen(true)}
+      />
+
+      {/* StatusBar */}
+      <StatusBar
+        totalRows={data.length}
+        filteredRows={filteredData.length}
+        totalColumns={columnCount}
+      />
+
+      {/* View Picker Dialog */}
+      <ViewPickerDialog
+        isOpen={isViewPickerOpen}
+        onClose={() => setIsViewPickerOpen(false)}
+        views={views}
+        onSelectView={handleOpenView}
+        openViewIds={openViews.map((v) => v.id)}
+      />
+
+      {/* Filter Builder Dialog (for Create View) */}
+      <Dialog open={isFilterBuilderOpen} onOpenChange={setIsFilterBuilderOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh]">
           <DialogHeader>
-            <DialogTitle>
-              {editingViewId
-                ? `Edit Filters - ${views.find(v => v.id === editingViewId)?.name || 'View'}`
-                : 'Build Advanced Filters'}
-            </DialogTitle>
+            <DialogTitle>Crea Nuova View</DialogTitle>
             <DialogDescription>
-              {editingViewId
-                ? 'Modify the filter conditions for this view'
-                : 'Create complex filter conditions with groups and combinators'}
+              Configura i filtri per la tua view
             </DialogDescription>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto py-4">
-            <FilterBuilder columns={columns} />
+          <div className="overflow-y-auto">
+            <FilterBuilder
+              columns={columns}
+              data={data}
+              onApply={() => {
+                setIsFilterBuilderOpen(false);
+                setShowSaveViewDialog(true);
+              }}
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseFilterBuilder}>
-              {editingViewId ? 'Save & Close' : 'Close'}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Save View Modal */}
-      <Dialog open={showSavePreset} onOpenChange={setShowSavePreset}>
-        <DialogContent className="sm:max-w-[500px]">
+      {/* Save View Dialog */}
+      <Dialog open={showSaveViewDialog} onOpenChange={setShowSaveViewDialog}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Save Filter View</DialogTitle>
+            <DialogTitle>Salva View</DialogTitle>
             <DialogDescription>
-              Save current filters as a reusable view
+              Dai un nome alla tua view
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Name *</label>
-              <input
-                type="text"
-                value={presetName}
-                onChange={(e) => setPresetName(e.target.value)}
-                placeholder="e.g., Active Customers"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div>
+              <Label htmlFor="view-name">Nome *</Label>
+              <Input
+                id="view-name"
+                value={viewName}
+                onChange={(e) => setViewName(e.target.value)}
+                placeholder="Es: Clienti VIP"
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Description</label>
-              <input
-                type="text"
-                value={presetDescription}
-                onChange={(e) => setPresetDescription(e.target.value)}
-                placeholder="Optional description"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Category</label>
-              <input
-                type="text"
-                value={presetCategory}
-                onChange={(e) => setPresetCategory(e.target.value)}
-                placeholder="e.g., Sales, Finance"
-                className="w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div>
+              <Label htmlFor="view-description">Descrizione</Label>
+              <Textarea
+                id="view-description"
+                value={viewDescription}
+                onChange={(e) => setViewDescription(e.target.value)}
+                placeholder="Descrivi questa view..."
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSavePreset(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setShowSaveViewDialog(false)}>
+              Annulla
             </Button>
-            <Button onClick={handleSavePreset}>Save View</Button>
+            <Button onClick={handleSaveNewView}>Salva View</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Keyboard Shortcuts Help */}
-      {showKeyboardShortcuts && (
-        <KeyboardShortcutsHelp onClose={() => setShowKeyboardShortcuts(false)} />
-      )}
-
-      {/* Command Palette (⌘K) */}
-      <CommandPalette isOpen={commandPalette.isOpen} onClose={commandPalette.close} />
     </div>
   );
 }
