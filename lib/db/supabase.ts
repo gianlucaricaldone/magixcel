@@ -1,4 +1,4 @@
-import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView } from '@/types';
+import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView, IActiveView } from '@/types/database';
 import { ViewChart } from '@/types/charts';
 
 /**
@@ -187,6 +187,23 @@ export class SupabaseDB implements IDatabase {
   }
 
   async reorderViewCharts(viewId: string, chartIds: string[]): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  // Active Views
+  async listActiveViews(sessionId: string, sheetName?: string | null): Promise<IActiveView[]> {
+    throw new Error('Not implemented');
+  }
+
+  async activateView(sessionId: string, sheetName: string | null, viewId: string): Promise<IActiveView> {
+    throw new Error('Not implemented');
+  }
+
+  async deactivateView(sessionId: string, sheetName: string | null, viewId: string): Promise<void> {
+    throw new Error('Not implemented');
+  }
+
+  async isViewActive(sessionId: string, sheetName: string | null, viewId: string): Promise<boolean> {
     throw new Error('Not implemented');
   }
 }

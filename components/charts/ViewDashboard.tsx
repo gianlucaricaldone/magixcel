@@ -92,7 +92,7 @@ export function ViewDashboard({
           chart_type: chartConfig.type,
           config: JSON.stringify(chartConfig),
           size: chartConfig.size || 'medium',
-          display_order: charts.length,
+          position: charts.length,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };

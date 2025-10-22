@@ -1,13 +1,11 @@
 'use client';
 
-import { useEffect } from 'react';
 import { Plus, X, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFilterStore } from '@/stores/filter-store';
-import { useDataStore } from '@/stores/data-store';
 import { FilterOperator, IFilter, IFilterGroup } from '@/types';
-import { applyFilters } from '@/lib/processing/filter-engine';
-import { FilterPresets } from './FilterPresets';
+// FilterPresets removed - views are now managed in ViewsTab
+// import { FilterPresets } from './FilterPresets';
 
 interface FilterBuilderProps {
   columns: string[];
@@ -24,7 +22,6 @@ export function FilterBuilder({ columns }: FilterBuilderProps) {
     setCombinator,
     getFilterConfig
   } = useFilterStore();
-  const { data, setFilteredData } = useDataStore();
 
   // Get filters from the active sheet
   const filterConfig = getFilterConfig();
@@ -40,19 +37,12 @@ export function FilterBuilder({ columns }: FilterBuilderProps) {
     'isNotNull',
   ];
 
-  // Apply filters live whenever filters change
-  useEffect(() => {
-    if (data.length === 0) return;
-
-    const config = getFilterConfig();
-    const filtered = applyFilters(data, config, '');
-    setFilteredData(filtered);
-  }, [filters, combinator, data]);
+  // NOTE: Filter application is handled by the session page useEffect
+  // No need to apply filters here to avoid infinite loops
 
   return (
     <div className="space-y-4">
-      {/* Filter Presets */}
-      <FilterPresets />
+      {/* Filter Presets removed - views are now managed in ViewsTab */}
 
       {/* Root Combinator */}
       {filters.length > 1 && (

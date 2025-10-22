@@ -34,6 +34,7 @@ interface FilterState {
   updateGroup: (id: string, combinator: FilterCombinator) => void;
   removeGroup: (id: string) => void;
   clearFilters: () => void;
+  clearAllFilters: () => void; // Clear filters for ALL sheets (used when switching sessions)
   setCombinator: (combinator: FilterCombinator) => void;
   setActiveFilterHash: (hash: string | null) => void;
   setActiveSheet: (sheetName: string | null) => void;
@@ -41,17 +42,16 @@ interface FilterState {
   getFilterConfig: () => IFilterConfig;
 
   // View Actions
-  loadViews: (workspaceId?: string, sessionId?: string, sheetName?: string | null) => Promise<void>;
+  loadViews: (workspaceId?: string, sessionId?: string) => Promise<void>;
   saveView: (
     name: string,
-    options?: {
+    options: {
+      workspaceId: string; // REQUIRED
+      sessionId: string; // REQUIRED
       description?: string;
       category?: string;
       viewType?: ViewType;
       isPublic?: boolean;
-      bindToSession?: boolean;
-      workspaceId?: string;
-      sessionId?: string;
       snapshotData?: any[];
     }
   ) => Promise<{ success: boolean; error?: string; view?: IView; publicLink?: string }>;
@@ -250,6 +250,16 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     }
   },
 
+  clearAllFilters: () => {
+    // Clear ALL filters for ALL sheets (used when switching sessions)
+    set({
+      filtersBySheet: {},
+      filters: [],
+      combinator: 'AND',
+      activeFilterHash: null,
+    });
+  },
+
   setCombinator: (combinator) => {
     const state = get();
     if (state.activeSheet) {
@@ -309,13 +319,13 @@ export const useFilterStore = create<FilterState>((set, get) => ({
   },
 
   // View Actions
-  loadViews: async (workspaceId, sessionId, sheetName) => {
+  loadViews: async (workspaceId, sessionId) => {
     set({ viewsLoading: true });
     try {
       const params = new URLSearchParams();
       if (workspaceId) params.append('workspaceId', workspaceId);
       if (sessionId) params.append('sessionId', sessionId);
-      if (sheetName !== undefined) params.append('sheetName', sheetName || '');
+      // NOTE: sheetName removed - views are GLOBAL to workspace
 
       const url = params.toString() ? `/api/views?${params.toString()}` : '/api/views';
       const response = await fetch(url);
@@ -332,13 +342,9 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     }
   },
 
-  saveView: async (name, options = {}) => {
+  saveView: async (name, options) => {
     const state = get();
     const filterConfig = state.getFilterConfig();
-
-    if (!options.workspaceId) {
-      return { success: false, error: 'Workspace ID is required' };
-    }
 
     try {
       const response = await fetch('/api/views', {
@@ -352,19 +358,17 @@ export const useFilterStore = create<FilterState>((set, get) => ({
           viewType: options.viewType || 'filters_only',
           snapshotData: options.snapshotData,
           isPublic: options.isPublic || false,
-          bindToSession: options.bindToSession || false,
-          workspaceId: options.workspaceId,
-          sessionId: options.sessionId,
-          sheetName: state.activeSheet, // Include current sheet name
+          workspaceId: options.workspaceId, // REQUIRED
+          sessionId: options.sessionId, // REQUIRED
+          // NOTE: sheetName removed - views are GLOBAL to workspace
         }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        // Reload views to get updated list
-        const currentState = get();
-        await get().loadViews(options.workspaceId, options.sessionId, currentState.activeSheet);
+        // Reload views to get updated list (GLOBAL views for workspace)
+        await get().loadViews(options.workspaceId, options.sessionId);
         set({ currentViewId: result.view.id });
         return {
           success: true,
@@ -502,11 +506,14 @@ export const useFilterStore = create<FilterState>((set, get) => ({
     }
   },
 
-  // Backward compatibility aliases
+  // Backward compatibility aliases (DEPRECATED)
   loadPresets: async () => get().loadViews(),
   savePreset: async (name, description, category) => {
-    const result = await get().saveView(name, { description, category });
-    return { success: result.success, error: result.error, preset: result.view };
+    console.warn('savePreset is deprecated and will fail. Use saveView with workspaceId and sessionId instead.');
+    return {
+      success: false,
+      error: 'savePreset is deprecated. Use saveView with required workspaceId and sessionId parameters.',
+    };
   },
   loadPreset: async (id) => get().loadView(id),
   updatePreset: async (id, updates) => get().updateView(id, updates),

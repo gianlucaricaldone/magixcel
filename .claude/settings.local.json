@@ -41,7 +41,11 @@
       "Bash(sqlite3 data/magixcel.db \"SELECT id, name, session_id, sheet_name FROM views;\")",
       "Bash(sqlite3 data/magixcel.db \"SELECT s.id, s.workspace_id, COUNT(v.id) as view_count FROM sessions s LEFT JOIN views v ON v.session_id = s.id GROUP BY s.id;\")",
       "Bash(sqlite3 data/magixcel.db \"ALTER TABLE views ADD COLUMN workspace_id TEXT;\")",
-      "Bash(sqlite3 data/magixcel.db \"UPDATE views SET workspace_id = ''default'' WHERE workspace_id IS NULL;\")"
+      "Bash(sqlite3 data/magixcel.db \"UPDATE views SET workspace_id = ''default'' WHERE workspace_id IS NULL;\")",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: Views isolate per workspace\n\nImplementato sistema di isolamento views per workspace.\n\n**Database Migration:**\n- Aggiunto campo `workspace_id TEXT` alla tabella views\n- Views esistenti migrate a workspace ''default''\n- workspace_id è ora REQUIRED per tutte le views\n\n**Tipo IView:**\n- Aggiunto campo `workspace_id: string` (required)\n- Gerarchia completa: Workspace → Session → Sheet → View\n\n**API Views:**\n- GET /api/views: Aggiunto filtro per `workspaceId` query param\n- POST /api/views: workspace_id è required nel body\n- Validazione: errore 400 se workspace_id mancante\n\n**Filter Store:**\n- `loadViews(workspaceId, sessionId, sheetName)`: workspace_id come primo parametro\n- `saveView`: workspace_id required in options, errore se mancante\n- Auto-reload views filtrate per workspace corrente\n\n**Session Page:**\n- Tutte le chiamate a loadViews includono workspaceId\n- saveView passa workspace_id dal params URL\n- Views isolate completamente per workspace\n\n**Comportamento:**\n- Views di Workspace A NON visibili in Workspace B\n- Ogni workspace ha le sue views indipendenti\n- All''interno del workspace, views filtrate per session/sheet come prima\n\n**Gerarchia Completa:**\n```\nWorkspace (isolamento views)\n  └── Session (file Excel/CSV)\n       └── Sheet (foglio Excel)\n            └── View (filtri + charts)\n```\n\n**Esempio:**\n- Workspace \"Marketing\": views \"Q1 Sales\", \"Campaign ROI\"\n- Workspace \"Finance\": views \"Budget 2024\", \"Expenses\"\n- Switch workspace → vedi solo views di quel workspace\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(sqlite3:*)",
+      "Bash(npx tsc:*)",
+      "Bash(perl:*)"
     ],
     "deny": [],
     "ask": []

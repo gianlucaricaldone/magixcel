@@ -40,7 +40,7 @@ export default function SessionPage() {
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
   const { data, setData, filteredData, setFilteredData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet, updateSheetFilteredCount } = useDataStore();
-  const { getFilterConfig, filtersBySheet, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet, saveView, loadViews } = useFilterStore();
+  const { getFilterConfig, filtersBySheet, setActiveSheet: setFilterActiveSheet, restoreFiltersBySheet, clearAllFilters, saveView, loadViews } = useFilterStore();
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [globalSearch, setGlobalSearch] = useState('');
@@ -51,8 +51,11 @@ export default function SessionPage() {
   // Tab navigation state - Read from URL or default to 'explorer'
   const initialTab = (searchParams.get('tab') as TabType) || 'explorer';
   const [activeTab, setActiveTab] = useState<TabType>(initialTab);
-  const [currentView, setCurrentView] = useState<IView | null>(null);
+  const [activeViewIds, setActiveViewIds] = useState<string[]>([]);
   const [chartCounts, setChartCounts] = useState<Record<string, number>>({});
+
+  // Separate filtered data for Explorer and Views tabs
+  const [viewsFilteredData, setViewsFilteredData] = useState<any[]>([]);
 
   // Handle tab change with URL update
   const handleTabChange = (tab: TabType) => {
@@ -65,6 +68,7 @@ export default function SessionPage() {
 
   // Modals state
   const [showFilterBuilder, setShowFilterBuilder] = useState(false);
+  const [editingViewId, setEditingViewId] = useState<string | null>(null);
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [presetName, setPresetName] = useState('');
@@ -80,12 +84,38 @@ export default function SessionPage() {
   // Load all views on mount and when sheet changes
   const { views } = useFilterStore();
 
-  // Reload views when active sheet changes
+  // Load ALL views for the workspace (not filtered by sheet - views are GLOBAL)
   useEffect(() => {
     if (workspaceId && sessionId) {
-      loadViews(workspaceId, sessionId, activeSheet);
+      loadViews(workspaceId, sessionId);
     }
-  }, [workspaceId, sessionId, activeSheet, loadViews]);
+  }, [workspaceId, sessionId, loadViews]);
+
+  // Load active views from database when session or sheet changes
+  useEffect(() => {
+    const loadActiveViews = async () => {
+      if (!sessionId) return;
+
+      try {
+        const url = new URL('/api/active-views', window.location.origin);
+        url.searchParams.set('sessionId', sessionId);
+        if (activeSheet) {
+          url.searchParams.set('sheetName', activeSheet);
+        }
+
+        const response = await fetch(url.toString());
+        const result = await response.json();
+
+        if (result.success && result.activeViews) {
+          setActiveViewIds(result.activeViews.map((av: any) => av.view_id));
+        }
+      } catch (error) {
+        console.error('Error loading active views:', error);
+      }
+    };
+
+    loadActiveViews();
+  }, [sessionId, activeSheet]);
 
   // Load chart counts for all views
   useEffect(() => {
@@ -111,10 +141,43 @@ export default function SessionPage() {
   }, [views]);
 
   // Handlers for Views tab
-  const handleSelectView = (view: IView) => {
-    setCurrentView(view);
-    // Load the view's filters
-    useFilterStore.getState().loadView(view.id);
+  const handleToggleView = async (viewId: string) => {
+    if (!sessionId) return;
+
+    const isActive = activeViewIds.includes(viewId);
+
+    try {
+      if (isActive) {
+        // Deactivate view
+        const url = new URL('/api/active-views', window.location.origin);
+        url.searchParams.set('sessionId', sessionId);
+        url.searchParams.set('viewId', viewId);
+        if (activeSheet) {
+          url.searchParams.set('sheetName', activeSheet);
+        }
+
+        await fetch(url.toString(), { method: 'DELETE' });
+
+        // Remove from active list
+        setActiveViewIds(prev => prev.filter(id => id !== viewId));
+      } else {
+        // Activate view
+        await fetch('/api/active-views', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            sheetName: activeSheet,
+            viewId,
+          }),
+        });
+
+        // Add to active list
+        setActiveViewIds(prev => [...prev, viewId]);
+      }
+    } catch (error) {
+      console.error('Error toggling view:', error);
+    }
   };
 
   const handleCreateView = () => {
@@ -133,12 +196,8 @@ export default function SessionPage() {
 
       const result = await response.json();
       if (result.success) {
-        // Reload views for current sheet
-        await loadViews(workspaceId, sessionId, activeSheet);
-        // Update current view if it's the one being edited
-        if (currentView?.id === viewId) {
-          setCurrentView(result.view);
-        }
+        // Reload ALL views for workspace (views are GLOBAL)
+        await loadViews(workspaceId, sessionId);
       }
     } catch (error) {
       console.error('Error updating view:', error);
@@ -153,12 +212,10 @@ export default function SessionPage() {
 
       const result = await response.json();
       if (result.success) {
-        // Clear current view if it was deleted
-        if (currentView?.id === viewId) {
-          setCurrentView(null);
-        }
-        // Reload views for current sheet
-        await loadViews(workspaceId, sessionId, activeSheet);
+        // Remove from active views if it was active
+        setActiveViewIds(prev => prev.filter(id => id !== viewId));
+        // Reload ALL views for workspace (views are GLOBAL)
+        await loadViews(workspaceId, sessionId);
       } else {
         alert(result.error || 'Failed to delete view');
       }
@@ -168,11 +225,12 @@ export default function SessionPage() {
     }
   };
 
-  const handleEditFilters = () => {
-    if (!currentView) return;
+  const handleEditFilters = (viewId: string) => {
+    // Store which view we're editing
+    setEditingViewId(viewId);
 
-    // Load the current view's filters into the filter store
-    useFilterStore.getState().loadView(currentView.id);
+    // Load the view's filters into the filter store
+    useFilterStore.getState().loadView(viewId);
 
     // Open the filter builder modal
     setShowFilterBuilder(true);
@@ -181,12 +239,12 @@ export default function SessionPage() {
   const handleCloseFilterBuilder = async () => {
     setShowFilterBuilder(false);
 
-    // If we have a current view, save the updated filters
-    if (currentView) {
+    // If we were editing a view, save the updated filters
+    if (editingViewId) {
       const filterConfig = getFilterConfig();
 
       try {
-        const response = await fetch(`/api/views/${currentView.id}`, {
+        const response = await fetch(`/api/views/${editingViewId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -196,14 +254,15 @@ export default function SessionPage() {
 
         const result = await response.json();
         if (result.success) {
-          // Reload views to get updated data for current sheet
-          await loadViews(workspaceId, sessionId, activeSheet);
-          // Update current view
-          setCurrentView(result.view);
+          // Reload ALL views for workspace (views are GLOBAL)
+          await loadViews(workspaceId, sessionId);
         }
       } catch (error) {
         console.error('Error updating view filters:', error);
       }
+
+      // Clear editing state
+      setEditingViewId(null);
     }
   };
 
@@ -268,6 +327,21 @@ export default function SessionPage() {
     }
   }, [sessionId]);
 
+  // Auto-save filters when switching sessions or unmounting
+  useEffect(() => {
+    return () => {
+      // Cleanup: Save current filters before leaving session
+      const currentFilters = useFilterStore.getState().filtersBySheet;
+      if (sessionId && Object.keys(currentFilters).length > 0) {
+        fetch(`/api/session/${sessionId}/filters`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filtersBySheet: currentFilters }),
+        }).catch(error => console.error('Failed to save filters on cleanup:', error));
+      }
+    };
+  }, [sessionId]);
+
   // Sync active sheet between data store and filter store
   useEffect(() => {
     if (activeSheet) {
@@ -275,19 +349,50 @@ export default function SessionPage() {
     }
   }, [activeSheet, setFilterActiveSheet]);
 
-  // Apply filters and global search (always LIVE)
+  // Apply Explorer filters (for Explorer tab only)
   useEffect(() => {
     if (data.length === 0) return;
 
-    const filterConfig = getFilterConfig();
-    const filtered = applyFilters(data, filterConfig, debouncedGlobalSearch);
+    // Apply ONLY Explorer tab filters (temporary filters)
+    const explorerFilters = getFilterConfig();
+    const filtered = applyFilters(data, explorerFilters, debouncedGlobalSearch);
+
     setFilteredData(filtered);
 
-    // Update filtered count for active sheet
+    // Update filtered count for active sheet (only for Explorer)
     if (activeSheet) {
       updateSheetFilteredCount(activeSheet, filtered.length);
     }
   }, [debouncedGlobalSearch, data, filtersBySheet, activeSheet, getFilterConfig, setFilteredData, updateSheetFilteredCount]);
+
+  // Apply Views filters (for Views tab only)
+  useEffect(() => {
+    if (data.length === 0) return;
+
+    let filtered = data;
+
+    // Apply each active view's filters in AND
+    if (activeViewIds.length > 0) {
+      const activeViews = views.filter(v => activeViewIds.includes(v.id));
+
+      for (const view of activeViews) {
+        try {
+          const viewFilterConfig = JSON.parse(view.filter_config);
+          // Apply view filters on already filtered data (AND logic)
+          filtered = applyFilters(filtered, viewFilterConfig, '');
+        } catch (error) {
+          console.error(`Error parsing filter config for view ${view.id}:`, error);
+        }
+      }
+    }
+
+    // Apply global search to views data as well
+    if (debouncedGlobalSearch) {
+      filtered = applyFilters(filtered, { combinator: 'and', rules: [] }, debouncedGlobalSearch);
+    }
+
+    setViewsFilteredData(filtered);
+  }, [data, activeViewIds, views, debouncedGlobalSearch]);
 
   const loadSession = async (id: string) => {
     setIsLoadingSession(true);
@@ -350,6 +455,9 @@ export default function SessionPage() {
         // No sheets, set null for CSV files
         setFilterActiveSheet(null);
       }
+
+      // Clear all filters from previous session first
+      clearAllFilters();
 
       // Restore saved filters if available
       if (session.active_filters) {
@@ -433,11 +541,8 @@ export default function SessionPage() {
       setPresetCategory('Custom');
       setShowSavePreset(false);
 
-      // Reload views to update the list for current sheet
-      await loadViews(workspaceId, sessionId, activeSheet);
-
-      // Set as current view
-      setCurrentView(result.view);
+      // Reload ALL views for workspace (views are GLOBAL)
+      await loadViews(workspaceId, sessionId);
 
       // Switch to Views tab to show the newly created view
       setActiveTab('views');
@@ -525,11 +630,13 @@ export default function SessionPage() {
         {activeTab === 'views' && (
           <ViewsTab
             views={views}
-            currentView={currentView}
-            data={filteredData}
+            activeViewIds={activeViewIds}
+            sessionId={sessionId}
+            activeSheet={activeSheet}
+            data={viewsFilteredData}
             columns={columns}
             columnCount={columnCount}
-            onSelectView={handleSelectView}
+            onToggleView={handleToggleView}
             onCreateView={handleCreateView}
             onUpdateView={handleUpdateView}
             onDeleteView={handleDeleteView}
@@ -564,10 +671,12 @@ export default function SessionPage() {
         <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
             <DialogTitle>
-              {currentView ? `Edit Filters - ${currentView.name}` : 'Build Advanced Filters'}
+              {editingViewId
+                ? `Edit Filters - ${views.find(v => v.id === editingViewId)?.name || 'View'}`
+                : 'Build Advanced Filters'}
             </DialogTitle>
             <DialogDescription>
-              {currentView
+              {editingViewId
                 ? 'Modify the filter conditions for this view'
                 : 'Create complex filter conditions with groups and combinators'}
             </DialogDescription>
@@ -577,7 +686,7 @@ export default function SessionPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={handleCloseFilterBuilder}>
-              {currentView ? 'Save & Close' : 'Close'}
+              {editingViewId ? 'Save & Close' : 'Close'}
             </Button>
           </DialogFooter>
         </DialogContent>

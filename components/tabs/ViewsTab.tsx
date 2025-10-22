@@ -1,89 +1,104 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { IView } from '@/types/database';
+import { IView, IActiveView } from '@/types/database';
 import { ViewsSidebar } from '@/components/views/ViewsSidebar';
 import { ActiveViewPanel } from '@/components/views/ActiveViewPanel';
-import { Layers } from 'lucide-react';
+import { Layers, CheckSquare } from 'lucide-react';
 
 interface ViewsTabProps {
   views: IView[];
-  currentView: IView | null;
+  activeViewIds: string[]; // Changed: multi-selection instead of single currentView
+  sessionId: string;
+  activeSheet: string | null;
   data: any[];
   columns: string[];
   columnCount: number;
-  onSelectView: (view: IView) => void;
+  onToggleView: (viewId: string) => void; // Changed: toggle instead of select
   onCreateView: () => void;
   onUpdateView: (viewId: string, updates: Partial<IView>) => void;
   onDeleteView: (viewId: string) => void;
-  onEditFilters: () => void;
+  onEditFilters: (viewId: string) => void;
   chartCounts?: Record<string, number>;
 }
 
 export function ViewsTab({
   views,
-  currentView,
+  activeViewIds,
+  sessionId,
+  activeSheet,
   data,
   columns,
   columnCount,
-  onSelectView,
+  onToggleView,
   onCreateView,
   onUpdateView,
   onDeleteView,
   onEditFilters,
   chartCounts,
 }: ViewsTabProps) {
-  const [lastSaved, setLastSaved] = useState<Date | undefined>();
+  const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
 
-  // Update last saved when view changes
-  useEffect(() => {
-    if (currentView) {
-      setLastSaved(new Date());
-    }
-  }, [currentView]);
-
-  const handleUpdateView = (updates: Partial<IView>) => {
-    if (currentView) {
-      onUpdateView(currentView.id, updates);
-      setLastSaved(new Date());
-    }
-  };
+  // Get selected view for detail panel
+  const selectedView = views.find(v => v.id === selectedViewId) || null;
 
   return (
     <div className="flex-1 flex overflow-hidden">
-      {/* Sidebar */}
+      {/* Sidebar with multi-select checkboxes */}
       <ViewsSidebar
         views={views}
-        currentViewId={currentView?.id}
-        onSelectView={onSelectView}
+        activeViewIds={activeViewIds}
+        selectedViewId={selectedViewId}
+        onToggleView={onToggleView}
+        onSelectView={setSelectedViewId}
         onCreateView={onCreateView}
         chartCounts={chartCounts}
       />
 
-      {/* Main Panel */}
-      {currentView ? (
+      {/* Main Panel - Shows selected view for editing */}
+      {selectedView ? (
         <ActiveViewPanel
-          view={currentView}
+          view={selectedView}
           data={data}
           columns={columns}
           columnCount={columnCount}
-          onUpdateView={handleUpdateView}
-          onDeleteView={() => onDeleteView(currentView.id)}
-          onEditFilters={onEditFilters}
-          lastSaved={lastSaved}
+          onUpdateView={(updates) => onUpdateView(selectedView.id, updates)}
+          onDeleteView={() => {
+            onDeleteView(selectedView.id);
+            setSelectedViewId(null);
+          }}
+          onEditFilters={() => onEditFilters(selectedView.id)}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center bg-slate-50">
           <div className="text-center max-w-md p-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-              <Layers className="h-8 w-8 text-blue-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-slate-900 mb-2">
-              No View Selected
-            </h3>
-            <p className="text-slate-600 mb-4">
-              Select a view from the sidebar or create a new one to start building your dashboard.
-            </p>
+            {activeViewIds.length > 0 ? (
+              <>
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                  <CheckSquare className="h-8 w-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                  {activeViewIds.length} View{activeViewIds.length > 1 ? 's' : ''} Active
+                </h3>
+                <p className="text-slate-600 mb-4">
+                  Filters from active views are applied in AND.
+                  Click on a view name to see details and charts.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
+                  <Layers className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-slate-900 mb-2">
+                  No Views Active
+                </h3>
+                <p className="text-slate-600 mb-4">
+                  Check views from the sidebar to apply their filters.
+                  Click on a view name to see details and charts.
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}

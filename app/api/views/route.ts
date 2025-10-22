@@ -12,19 +12,13 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') || undefined;
     const sessionId = searchParams.get('sessionId') || undefined;
-    const sheetName = searchParams.get('sheetName') || undefined;
     const workspaceId = searchParams.get('workspaceId') || undefined;
 
     let views = await db.listViews(sessionId, category);
 
-    // Filter by workspace if provided
+    // Filter by workspace if provided (views are GLOBAL to workspace)
     if (workspaceId) {
       views = views.filter((view) => view.workspace_id === workspaceId);
-    }
-
-    // Filter by sheet name if provided
-    if (sheetName !== undefined) {
-      views = views.filter((view) => view.sheet_name === sheetName);
     }
 
     return NextResponse.json({
@@ -56,12 +50,10 @@ export async function POST(request: NextRequest) {
       category,
       workspaceId,
       sessionId,
-      sheetName,
       filterConfig,
       viewType = 'filters_only',
       snapshotData,
       isPublic = false,
-      bindToSession = false,
     } = body;
 
     // Validation
@@ -75,6 +67,13 @@ export async function POST(request: NextRequest) {
     if (!workspaceId || typeof workspaceId !== 'string') {
       return NextResponse.json(
         { success: false, error: 'Workspace ID is required' },
+        { status: 400 }
+      );
+    }
+
+    if (!sessionId || typeof sessionId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: 'Session ID is required' },
         { status: 400 }
       );
     }
@@ -125,14 +124,13 @@ export async function POST(request: NextRequest) {
     // Generate public link ID if public
     const publicLinkId = isPublic ? nanoid(10) : undefined;
 
-    // Create view
+    // Create view (GLOBAL to workspace, not tied to a specific sheet)
     const view = await db.createView({
       name,
       description: description || '',
       category: category || 'Custom',
       workspace_id: workspaceId,
-      session_id: bindToSession && sessionId ? sessionId : undefined,
-      sheet_name: sheetName || null,
+      session_id: sessionId, // REQUIRED: Every view must be linked to a session
       filter_config: JSON.stringify(filterConfig),
       view_type: viewType as ViewType,
       snapshot_data: snapshotData ? JSON.stringify(snapshotData) : undefined,

@@ -63,9 +63,9 @@ export interface IView {
   name: string;
   description?: string;
   category: string;
-  workspace_id: string; // Workspace this view belongs to
-  session_id?: string; // Optional: link view to specific session
-  sheet_name?: string | null; // Sheet name for multi-sheet files (Excel); null for CSV
+  workspace_id: string; // REQUIRED: Workspace this view belongs to
+  session_id: string; // REQUIRED: Session (file) this view belongs to
+  // NOTE: sheet_name removed - views are now GLOBAL to workspace, not tied to specific sheets
   filter_config: string; // JSON string of IFilterConfig
   view_type: ViewType;
   snapshot_data?: string; // JSON string of data rows (if view_type is 'snapshot')
@@ -77,6 +77,14 @@ export interface IView {
   access_count: number;
   dashboard_layout?: string; // JSON string of DashboardLayout
   chart_count: number;
+}
+
+export interface IActiveView {
+  id: string;
+  session_id: string;
+  sheet_name: string | null; // Sheet name where this view is active (NULL for CSV)
+  view_id: string;
+  created_at: string;
 }
 
 // Backward compatibility alias
@@ -144,4 +152,10 @@ export interface IDatabase {
   updateViewChart(id: string, data: Partial<Omit<ViewChart, 'id' | 'created_at'>>): Promise<ViewChart>;
   deleteViewChart(id: string): Promise<void>;
   reorderViewCharts(viewId: string, chartIds: string[]): Promise<void>;
+
+  // Active Views (which views are active on which sheet)
+  listActiveViews(sessionId: string, sheetName?: string | null): Promise<IActiveView[]>;
+  activateView(sessionId: string, sheetName: string | null, viewId: string): Promise<IActiveView>;
+  deactivateView(sessionId: string, sheetName: string | null, viewId: string): Promise<void>;
+  isViewActive(sessionId: string, sheetName: string | null, viewId: string): Promise<boolean>;
 }

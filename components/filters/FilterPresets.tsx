@@ -1,5 +1,11 @@
 'use client';
 
+/**
+ * @deprecated This component is DEPRECATED and no longer used.
+ * Views are now managed in the ViewsTab component with proper workspace/session hierarchy.
+ * This file is kept for backward compatibility but should not be imported.
+ */
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Save, FolderOpen, Trash2, Edit2, Check, X, RefreshCw, BarChart3 } from 'lucide-react';
@@ -15,6 +21,9 @@ import {
 import { useFilterStore } from '@/stores/filter-store';
 import { IView } from '@/types/database';
 
+/**
+ * @deprecated Use ViewsTab instead
+ */
 export function FilterPresets() {
   const router = useRouter();
   const {
@@ -54,6 +63,7 @@ export function FilterPresets() {
       return;
     }
 
+    // @ts-ignore - DEPRECATED: This component requires workspace/session which are not available
     const result = await saveView(saveName, {
       description: saveDescription,
       category: saveCategory,

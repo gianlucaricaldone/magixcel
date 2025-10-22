@@ -3,20 +3,25 @@
 import { IView } from '@/types/database';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus, Layers, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface ViewsSidebarProps {
   views: IView[];
-  currentViewId?: string;
-  onSelectView: (view: IView) => void;
+  activeViewIds: string[]; // Changed: multi-selection
+  selectedViewId: string | null; // Changed: for detail panel
+  onToggleView: (viewId: string) => void; // Changed: toggle active/inactive
+  onSelectView: (viewId: string | null) => void; // Changed: for detail panel
   onCreateView: () => void;
   chartCounts?: Record<string, number>;
 }
 
 export function ViewsSidebar({
   views,
-  currentViewId,
+  activeViewIds,
+  selectedViewId,
+  onToggleView,
   onSelectView,
   onCreateView,
   chartCounts = {},
@@ -30,9 +35,16 @@ export function ViewsSidebar({
             <Layers className="h-4 w-4" />
             Views
           </h3>
-          <Badge variant="secondary" className="text-xs">
-            {views.length}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {activeViewIds.length > 0 && (
+              <Badge variant="default" className="text-xs bg-green-600">
+                {activeViewIds.length} active
+              </Badge>
+            )}
+            <Badge variant="secondary" className="text-xs">
+              {views.length} total
+            </Badge>
+          </div>
         </div>
         <Button
           onClick={onCreateView}
@@ -62,65 +74,87 @@ export function ViewsSidebar({
         ) : (
           <div className="space-y-2">
             {views.map((view) => {
-              const isActive = view.id === currentViewId;
+              const isActive = activeViewIds.includes(view.id);
+              const isSelected = view.id === selectedViewId;
               const chartCount = chartCounts[view.id] || 0;
 
               return (
-                <button
+                <div
                   key={view.id}
-                  onClick={() => onSelectView(view)}
                   className={`
-                    w-full text-left p-3 rounded-lg border transition-all
+                    p-3 rounded-lg border transition-all
                     ${
-                      isActive
+                      isSelected
                         ? 'bg-blue-50 border-blue-300 shadow-sm'
-                        : 'bg-white border-slate-200 hover:border-blue-200 hover:shadow-sm'
+                        : isActive
+                        ? 'bg-green-50 border-green-200'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
                     }
                   `}
                 >
-                  {/* View Name */}
-                  <div className="flex items-start justify-between gap-2 mb-1">
-                    <h4
-                      className={`font-medium text-sm truncate ${
-                        isActive ? 'text-blue-900' : 'text-slate-900'
-                      }`}
-                    >
-                      {view.name}
-                    </h4>
-                    {isActive && (
-                      <div className="flex-shrink-0">
-                        <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Description */}
-                  {view.description && (
-                    <p className="text-xs text-slate-600 mb-2 line-clamp-2">
-                      {view.description}
-                    </p>
-                  )}
-
-                  {/* Meta Info */}
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    {chartCount > 0 && (
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] h-5 px-1.5 border-slate-300"
-                      >
-                        {chartCount} {chartCount === 1 ? 'chart' : 'charts'}
-                      </Badge>
-                    )}
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      <span>
-                        {formatDistanceToNow(new Date(view.updated_at), {
-                          addSuffix: true,
-                        })}
-                      </span>
+                  <div className="flex items-start gap-3">
+                    {/* Checkbox for activate/deactivate */}
+                    <div className="flex-shrink-0 pt-0.5">
+                      <Checkbox
+                        checked={isActive}
+                        onCheckedChange={() => onToggleView(view.id)}
+                      />
                     </div>
+
+                    {/* View content - clickable to see details */}
+                    <button
+                      onClick={() => onSelectView(view.id === selectedViewId ? null : view.id)}
+                      className="flex-1 text-left"
+                    >
+                      {/* View Name */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h4
+                          className={`font-medium text-sm truncate ${
+                            isSelected
+                              ? 'text-blue-900'
+                              : isActive
+                              ? 'text-green-900'
+                              : 'text-slate-900'
+                          }`}
+                        >
+                          {view.name}
+                        </h4>
+                        {isActive && !isSelected && (
+                          <div className="flex-shrink-0">
+                            <div className="h-2 w-2 rounded-full bg-green-500" />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Description */}
+                      {view.description && (
+                        <p className="text-xs text-slate-600 mb-2 line-clamp-2">
+                          {view.description}
+                        </p>
+                      )}
+
+                      {/* Meta Info */}
+                      <div className="flex items-center gap-2 text-xs text-slate-500">
+                        {chartCount > 0 && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-5 px-1.5 border-slate-300"
+                          >
+                            {chartCount} {chartCount === 1 ? 'chart' : 'charts'}
+                          </Badge>
+                        )}
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>
+                            {formatDistanceToNow(new Date(view.updated_at), {
+                              addSuffix: true,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -131,7 +165,9 @@ export function ViewsSidebar({
       {views.length > 0 && (
         <div className="p-3 border-t bg-white">
           <p className="text-xs text-slate-600">
-            💡 Click a view to load it. All changes are auto-saved.
+            ✅ Check views to apply filters (AND logic)
+            <br />
+            💡 Click name to see charts and details
           </p>
         </div>
       )}

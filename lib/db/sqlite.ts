@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
-import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView } from '@/types';
+import { IDatabase, IWorkspace, ISession, IFile, ISavedFilter, ICachedResult, IView, IActiveView } from '@/types/database';
 import { ViewChart } from '@/types/charts';
 import fs from 'fs';
 import path from 'path';
@@ -340,23 +340,25 @@ export class SQLiteDB implements IDatabase {
     return stmt.all(...params) as IView[];
   }
 
-  async createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count'>): Promise<IView> {
+  async createView(data: Omit<IView, 'id' | 'created_at' | 'updated_at' | 'access_count' | 'chart_count'>): Promise<IView> {
     const id = nanoid();
     const now = new Date().toISOString();
 
     const stmt = this.db.prepare(`
       INSERT INTO views (
-        id, name, description, category, session_id, filter_config, view_type,
-        snapshot_data, is_public, public_link_id, created_at, updated_at, access_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
+        id, workspace_id, session_id, name, description, category,
+        filter_config, view_type, snapshot_data, is_public, public_link_id,
+        created_at, updated_at, access_count, chart_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
     `);
 
     stmt.run(
       id,
+      data.workspace_id, // REQUIRED
+      data.session_id, // REQUIRED
       data.name,
       data.description || null,
       data.category,
-      data.session_id || null,
       data.filter_config,
       data.view_type,
       data.snapshot_data || null,
@@ -530,6 +532,58 @@ export class SQLiteDB implements IDatabase {
     chartIds.forEach((chartId, index) => {
       stmt.run(index, chartId);
     });
+  }
+
+  // Active Views - Track which views are active on which sheet
+  async listActiveViews(sessionId: string, sheetName?: string | null): Promise<IActiveView[]> {
+    let query = 'SELECT * FROM active_views WHERE session_id = ?';
+    const params: any[] = [sessionId];
+
+    if (sheetName !== undefined) {
+      query += ' AND sheet_name = ?';
+      params.push(sheetName);
+    }
+
+    const stmt = this.db.prepare(query);
+    return stmt.all(...params) as IActiveView[];
+  }
+
+  async activateView(sessionId: string, sheetName: string | null, viewId: string): Promise<IActiveView> {
+    const id = nanoid();
+    const now = new Date().toISOString();
+
+    // Use INSERT OR IGNORE to avoid duplicates
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO active_views (
+        id, session_id, sheet_name, view_id, created_at
+      ) VALUES (?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(id, sessionId, sheetName, viewId, now);
+
+    // Return the active view (might be existing one if it was already active)
+    const getStmt = this.db.prepare(`
+      SELECT * FROM active_views
+      WHERE session_id = ? AND sheet_name = ? AND view_id = ?
+    `);
+    return getStmt.get(sessionId, sheetName, viewId) as IActiveView;
+  }
+
+  async deactivateView(sessionId: string, sheetName: string | null, viewId: string): Promise<void> {
+    const stmt = this.db.prepare(`
+      DELETE FROM active_views
+      WHERE session_id = ? AND sheet_name = ? AND view_id = ?
+    `);
+    stmt.run(sessionId, sheetName, viewId);
+  }
+
+  async isViewActive(sessionId: string, sheetName: string | null, viewId: string): Promise<boolean> {
+    const stmt = this.db.prepare(`
+      SELECT COUNT(*) as count FROM active_views
+      WHERE session_id = ? AND sheet_name = ? AND view_id = ?
+    `);
+    const result = stmt.get(sessionId, sheetName, viewId) as { count: number };
+    return result.count > 0;
   }
 
   close() {
