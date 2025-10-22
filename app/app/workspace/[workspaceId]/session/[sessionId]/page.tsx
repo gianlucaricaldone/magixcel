@@ -36,7 +36,7 @@ export default function SessionPage() {
 
   const { setSession, metadata, setLoading, setError } = useSessionStore();
   const { data, setData, setSheets, sheets, activeSheet, setActiveSheet: setDataActiveSheet } = useDataStore();
-  const { loadViews, saveView, views } = useFilterStore();
+  const { loadViews, saveView, views, getFilterConfig } = useFilterStore();
 
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [workspaceName, setWorkspaceName] = useState<string>('');
@@ -51,6 +51,7 @@ export default function SessionPage() {
   const [viewName, setViewName] = useState('');
   const [viewDescription, setViewDescription] = useState('');
   const [viewCategory, setViewCategory] = useState('Custom');
+  const [capturedFilterConfig, setCapturedFilterConfig] = useState<any>(null);
 
   // Columns from data
   const columns = useMemo(() => {
@@ -190,23 +191,31 @@ export default function SessionPage() {
       return;
     }
 
+    if (!capturedFilterConfig) {
+      alert('No filter configuration captured');
+      return;
+    }
+
     try {
-      const filterConfig = {}; // Get from FilterBuilder
       await saveView({
         workspaceId,
         sessionId,
+        sheetName: activeSheet,
         name: viewName,
         description: viewDescription,
         category: viewCategory,
-        filterConfig,
+        filterConfig: capturedFilterConfig,
       });
 
-      // Reload views
-      loadViews(workspaceId, sessionId);
+      // Reload views for the current sheet
+      loadViews(workspaceId, sessionId, activeSheet);
+
+      // Reset state
       setShowSaveViewDialog(false);
       setViewName('');
       setViewDescription('');
       setViewCategory('Custom');
+      setCapturedFilterConfig(null);
     } catch (error) {
       console.error('Error saving view:', error);
       alert('Failed to save view');
@@ -279,9 +288,8 @@ export default function SessionPage() {
 
       {/* StatusBar */}
       <StatusBar
-        totalRows={data.length}
-        filteredRows={filteredData.length}
-        totalColumns={columnCount}
+        filteredCount={filteredData.length}
+        totalCount={data.length}
       />
 
       {/* View Picker Dialog */}
@@ -307,8 +315,14 @@ export default function SessionPage() {
               columns={columns}
               data={data}
               onApply={() => {
+                // Capture the current filter configuration from the store
+                const filterConfig = getFilterConfig();
+                setCapturedFilterConfig(filterConfig);
                 setIsFilterBuilderOpen(false);
                 setShowSaveViewDialog(true);
+              }}
+              onCancel={() => {
+                setIsFilterBuilderOpen(false);
               }}
             />
           </div>

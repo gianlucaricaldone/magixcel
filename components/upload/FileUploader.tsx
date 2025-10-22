@@ -2,8 +2,10 @@
 
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Upload } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { useSessionStore } from '@/stores/session-store';
 import { useDataStore } from '@/stores/data-store';
@@ -23,8 +25,9 @@ export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [sessionName, setSessionName] = useState<string>('');
 
-  const handleFile = useCallback(async (file: File) => {
+  const handleFileSelect = useCallback((file: File) => {
     // Validate file
     const validation = validateFile(file);
     if (!validation.valid) {
@@ -33,14 +36,21 @@ export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
     }
 
     setSelectedFile(file);
+    // Auto-fill session name from file name (without extension)
+    setSessionName(file.name.replace(/\.[^/.]+$/, ''));
+  }, [setError]);
+
+  const handleUpload = useCallback(async () => {
+    if (!selectedFile) return;
+
     setIsUploading(true);
     setUploadProgress(0);
     setLoading(true);
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('sessionName', file.name.replace(/\.[^/.]+$/, ''));
+      formData.append('file', selectedFile);
+      formData.append('sessionName', sessionName.trim() || selectedFile.name.replace(/\.[^/.]+$/, ''));
       formData.append('workspaceId', workspaceId);
 
       const response = await fetch('/api/upload', {
@@ -76,7 +86,7 @@ export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [setSession, setData, setLoading, setError, router, workspaceId]);
+  }, [selectedFile, sessionName, setSession, setData, setLoading, setError, router, workspaceId]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -85,61 +95,113 @@ export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
 
       const file = e.dataTransfer.files[0];
       if (file) {
-        handleFile(file);
+        handleFileSelect(file);
       }
     },
-    [handleFile]
+    [handleFileSelect]
   );
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-        handleFile(file);
+        handleFileSelect(file);
       }
     },
-    [handleFile]
+    [handleFileSelect]
   );
+
+  const handleCancel = useCallback(() => {
+    setSelectedFile(null);
+    setSessionName('');
+    setUploadProgress(0);
+  }, []);
 
   return (
     <div className="space-y-4">
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-        className={`
-          border-2 border-dashed rounded-lg p-12 text-center transition-colors
-          ${isDragging ? 'border-primary bg-primary/5' : 'border-slate-300'}
-          ${isUploading ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-        `}
-      >
-        <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-        <div className="mb-4">
-          <p className="text-lg font-medium text-slate-700 mb-1">
-            Drop your file here or click to browse
-          </p>
-          <p className="text-sm text-slate-500">
-            Supports Excel (.xlsx, .xls) and CSV files up to 1GB
-          </p>
+      {/* File selection area - show only when no file is selected */}
+      {!selectedFile && (
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragging(true);
+          }}
+          onDragLeave={() => setIsDragging(false)}
+          onDrop={handleDrop}
+          className={`
+            border-2 border-dashed rounded-lg p-12 text-center transition-colors
+            ${isDragging ? 'border-primary bg-primary/5' : 'border-slate-300'}
+            cursor-pointer
+          `}
+        >
+          <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
+          <div className="mb-4">
+            <p className="text-lg font-medium text-slate-700 mb-1">
+              Drop your file here or click to browse
+            </p>
+            <p className="text-sm text-slate-500">
+              Supports Excel (.xlsx, .xls) and CSV files up to 1GB
+            </p>
+          </div>
+          <input
+            type="file"
+            accept=".xlsx,.xls,.csv"
+            onChange={handleFileInput}
+            className="hidden"
+            id="file-input"
+          />
+          <label htmlFor="file-input">
+            <Button variant="outline" asChild>
+              <span>Browse Files</span>
+            </Button>
+          </label>
         </div>
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          onChange={handleFileInput}
-          disabled={isUploading}
-          className="hidden"
-          id="file-input"
-        />
-        <label htmlFor="file-input">
-          <Button variant="outline" disabled={isUploading} asChild>
-            <span>Browse Files</span>
-          </Button>
-        </label>
-      </div>
+      )}
 
+      {/* Confirmation form - show when file is selected but not uploading */}
+      {selectedFile && !isUploading && (
+        <div className="space-y-4 border rounded-lg p-6 bg-white">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <Upload className="h-5 w-5 text-blue-600" />
+                <p className="font-medium text-slate-900">{selectedFile.name}</p>
+              </div>
+              <p className="text-sm text-slate-500">{formatFileSize(selectedFile.size)}</p>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleCancel}
+              className="h-8 w-8 -mr-2"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="session-name">Session Name</Label>
+            <Input
+              id="session-name"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              placeholder="Enter session name"
+              autoFocus
+            />
+          </div>
+
+          <div className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button onClick={handleUpload} disabled={!sessionName.trim()}>
+              Create Session
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Upload progress - show when uploading */}
       {isUploading && selectedFile && (
         <div className="space-y-2">
           <div className="flex justify-between text-sm">

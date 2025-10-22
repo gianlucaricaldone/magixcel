@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { IView } from '@/types/database';
 import { ViewChart } from '@/types/charts';
 import { DataTable } from '@/components/table/DataTable';
@@ -8,7 +8,7 @@ import { ChartDisplay } from '@/components/charts/ChartDisplay';
 import { ChartBuilder } from '@/components/charts/ChartBuilder';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, BarChart3, Loader2, Sparkles } from 'lucide-react';
+import { Plus, BarChart3, Loader2, Sparkles, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,18 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
   const [editingChart, setEditingChart] = useState<ViewChart | null>(null);
+
+  // Charts panel state
+  const [isChartsPanelOpen, setIsChartsPanelOpen] = useState(false);
+  const [chartsPanelWidth, setChartsPanelWidth] = useState(400); // Default width in pixels
+  const [isResizing, setIsResizing] = useState(false);
+  const resizeRef = useRef<HTMLDivElement>(null);
+
+  // Table zoom state
+  const [zoomLevel, setZoomLevel] = useState(100); // 100 = 100%
+  const MIN_ZOOM = 50;
+  const MAX_ZOOM = 200;
+  const ZOOM_STEP = 10;
 
   // Load charts for this view
   useEffect(() => {
@@ -49,6 +61,40 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
 
     loadCharts();
   }, [view.id]);
+
+  // Handle resize
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+
+      const newWidth = window.innerWidth - e.clientX;
+      // Min width 300px, max width 80% of window
+      const minWidth = 300;
+      const maxWidth = window.innerWidth * 0.8;
+
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setChartsPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizing]);
 
   const handleSaveChart = async (chartConfig: any) => {
     try {
@@ -121,92 +167,190 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
 
   return (
     <>
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Data Table */}
-        <div className="w-1/2 bg-white border-r flex flex-col">
-          <div className="p-4 border-b">
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Data Table - Full width or with charts panel */}
+        <div
+          className="flex flex-col transition-all relative"
+          style={{
+            width: isChartsPanelOpen ? `calc(100% - ${chartsPanelWidth}px)` : 'calc(100% - 48px)',
+          }}
+        >
+          {/* Header with View Name */}
+          <div className="px-4 py-3 border-b bg-white">
             <h3 className="font-semibold text-slate-900">{view.name}</h3>
-            <p className="text-sm text-slate-600 mt-1">
-              {data.length} rows · {columns.length} columns
-            </p>
           </div>
-          <div className="flex-1 overflow-hidden">
-            <DataTable columns={columns} data={data} />
+
+          {/* Toolbar */}
+          <div className="h-10 px-4 border-b bg-slate-50 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setZoomLevel(Math.max(MIN_ZOOM, zoomLevel - ZOOM_STEP))}
+                disabled={zoomLevel <= MIN_ZOOM}
+                className="h-7 w-7 p-0"
+              >
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-slate-600 font-medium min-w-[45px] text-center">
+                {zoomLevel}%
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setZoomLevel(Math.min(MAX_ZOOM, zoomLevel + ZOOM_STEP))}
+                disabled={zoomLevel >= MAX_ZOOM}
+                className="h-7 w-7 p-0"
+              >
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <div className="h-4 w-px bg-slate-300 mx-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setZoomLevel(100)}
+                disabled={zoomLevel === 100}
+                className="h-7 px-2 text-xs"
+              >
+                <Maximize2 className="h-3 w-3 mr-1" />
+                Fit
+              </Button>
+            </div>
+            <div className="text-xs text-slate-500">
+              {data.length} rows · {columns.length} columns
+            </div>
+          </div>
+
+          {/* Table with zoom */}
+          <div className="flex-1 overflow-auto bg-white">
+            <div
+              style={{
+                transform: `scale(${zoomLevel / 100})`,
+                transformOrigin: 'top left',
+                width: `${(100 / zoomLevel) * 100}%`,
+                height: `${(100 / zoomLevel) * 100}%`,
+              }}
+            >
+              <DataTable columns={columns} data={data} />
+            </div>
           </div>
         </div>
 
-        {/* Right: Charts */}
-        <div className="w-1/2 bg-slate-50 flex flex-col">
-          <div className="p-4 border-b bg-white flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <h3 className="font-semibold text-slate-900">Charts</h3>
-              <Badge variant="outline">
-                <BarChart3 className="h-3 w-3 mr-1" />
-                {charts.length}
-              </Badge>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={() => setIsChartBuilderOpen(true)} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Chart
-              </Button>
-              <Button variant="outline" size="sm" disabled>
-                <Sparkles className="h-4 w-4 mr-2" />
-                Magic Charts
-              </Button>
-            </div>
+        {/* Vertical Sidebar for Charts Toggle - Only when panel is closed */}
+        {!isChartsPanelOpen && (
+          <div className="w-12 bg-slate-100 border-l border-slate-200 flex flex-col items-center py-4">
+            <button
+              onClick={() => setIsChartsPanelOpen(true)}
+              className="p-2 rounded-lg hover:bg-slate-200 transition-colors group relative"
+              title="Open Charts Panel"
+            >
+              <BarChart3 className="h-5 w-5 text-slate-600" />
+              {charts.length > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 w-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                  {charts.length}
+                </span>
+              )}
+            </button>
           </div>
+        )}
 
-          <div className="flex-1 overflow-y-auto p-4">
-            {isLoadingCharts ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
-                  <p className="text-sm text-slate-600">Loading charts...</p>
+        {/* Charts Panel - Collapsible and Resizable */}
+        {isChartsPanelOpen && (
+          <>
+            {/* Resize Handle */}
+            <div
+              ref={resizeRef}
+              onMouseDown={() => setIsResizing(true)}
+              className="w-1 bg-slate-200 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 relative group"
+            >
+              <div className="absolute inset-y-0 -left-1 -right-1" />
+            </div>
+
+            {/* Charts Panel */}
+            <div
+              className="bg-slate-50 flex flex-col"
+              style={{ width: `${chartsPanelWidth}px` }}
+            >
+              <div className="p-4 border-b bg-white flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setIsChartsPanelOpen(false)}
+                    className="h-8 w-8"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                  <h3 className="font-semibold text-slate-900">Charts</h3>
+                  <Badge variant="outline">
+                    <BarChart3 className="h-3 w-3 mr-1" />
+                    {charts.length}
+                  </Badge>
                 </div>
-              </div>
-            ) : charts.length === 0 ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center max-w-md">
-                  <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full mb-4">
-                    <BarChart3 className="h-8 w-8 text-slate-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">No charts yet</h3>
-                  <p className="text-sm text-slate-600 mb-4">
-                    Add your first chart to visualize this view&apos;s data
-                  </p>
-                  <Button onClick={() => setIsChartBuilderOpen(true)}>
+                <div className="flex gap-2">
+                  <Button onClick={() => setIsChartBuilderOpen(true)} size="sm">
                     <Plus className="h-4 w-4 mr-2" />
-                    Create Chart
+                    Add Chart
+                  </Button>
+                  <Button variant="outline" size="sm" disabled>
+                    <Sparkles className="h-4 w-4 mr-2" />
+                    Magic Charts
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4">
-                {charts.map((chart) => (
-                  <div
-                    key={chart.id}
-                    className={`
-                      bg-white rounded-lg border p-6
-                      ${chart.size === 'small' ? 'h-64' : 'h-96'}
-                    `}
-                  >
-                    <ChartDisplay
-                      chart={chart}
-                      data={data}
-                      onEdit={() => {
-                        setEditingChart(chart);
-                        setIsChartBuilderOpen(true);
-                      }}
-                      onDelete={() => handleDeleteChart(chart.id)}
-                      interactive={true}
-                    />
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {isLoadingCharts ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-2" />
+                      <p className="text-sm text-slate-600">Loading charts...</p>
+                    </div>
                   </div>
-                ))}
+                ) : charts.length === 0 ? (
+                  <div className="flex items-center justify-center h-full">
+                    <div className="text-center max-w-md">
+                      <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full mb-4">
+                        <BarChart3 className="h-8 w-8 text-slate-400" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-slate-900 mb-2">No charts yet</h3>
+                      <p className="text-sm text-slate-600 mb-4">
+                        Add your first chart to visualize this view&apos;s data
+                      </p>
+                      <Button onClick={() => setIsChartBuilderOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Chart
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {charts.map((chart) => (
+                      <div
+                        key={chart.id}
+                        className={`
+                          bg-white rounded-lg border p-6
+                          ${chart.size === 'small' ? 'h-64' : 'h-96'}
+                        `}
+                      >
+                        <ChartDisplay
+                          chart={chart}
+                          data={data}
+                          onEdit={() => {
+                            setEditingChart(chart);
+                            setIsChartBuilderOpen(true);
+                          }}
+                          onDelete={() => handleDeleteChart(chart.id)}
+                          interactive={true}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ChartBuilder Dialog */}

@@ -13,28 +13,46 @@ import {
   Filler,
   ChartOptions,
 } from 'chart.js';
-import ChartDataLabels from 'chartjs-plugin-datalabels';
-import zoomPlugin from 'chartjs-plugin-zoom';
 
-// Register all Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  ArcElement,
-  RadialLinearScale,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-  ChartDataLabels,
-  zoomPlugin
-);
+// Dynamic imports for plugins to avoid SSR issues
+let ChartDataLabels: any;
+let zoomPlugin: any;
+
+// Register all Chart.js components only on client side
+if (typeof window !== 'undefined') {
+  // Dynamically import plugins
+  import('chartjs-plugin-datalabels').then((module) => {
+    ChartDataLabels = module.default;
+    if (ChartDataLabels) {
+      ChartJS.register(ChartDataLabels);
+    }
+  });
+
+  import('chartjs-plugin-zoom').then((module) => {
+    zoomPlugin = module.default;
+    if (zoomPlugin) {
+      ChartJS.register(zoomPlugin);
+    }
+  });
+
+  // Register core components
+  ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    BarElement,
+    ArcElement,
+    RadialLinearScale,
+    Title,
+    Tooltip,
+    Legend,
+    Filler
+  );
+}
 
 // Default chart options
-export const defaultChartOptions: ChartOptions = {
+export const defaultChartOptions: ChartOptions<any> = {
   responsive: true,
   maintainAspectRatio: true,
   aspectRatio: 2,
@@ -75,7 +93,7 @@ export const defaultChartOptions: ChartOptions = {
     },
     datalabels: {
       display: false, // Disabled by default, enable per chart
-    },
+    } as any,
   },
   interaction: {
     mode: 'index' as const,

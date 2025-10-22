@@ -348,8 +348,9 @@ export class SQLiteDB implements IDatabase {
       INSERT INTO views (
         id, workspace_id, session_id, name, description, category,
         filter_config, view_type, snapshot_data, is_public, public_link_id,
+        is_default, sheet_name,
         created_at, updated_at, access_count, chart_count
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)
     `);
 
     stmt.run(
@@ -364,6 +365,8 @@ export class SQLiteDB implements IDatabase {
       data.snapshot_data || null,
       data.is_public ? 1 : 0,
       data.public_link_id || null,
+      (data as any).is_default || 0,
+      (data as any).sheet_name || null,
       now,
       now
     );

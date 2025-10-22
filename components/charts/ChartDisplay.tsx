@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Bar, Line, Pie, Doughnut, Scatter, Radar } from 'react-chartjs-2';
 import { Chart as ChartJS } from 'chart.js';
 import { ViewChart, ChartConfiguration } from '@/types/charts';
@@ -13,7 +13,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Maximize2, Edit2, Trash2, Download } from 'lucide-react';
-import '@/lib/charts/setup'; // Ensure Chart.js is registered
+
+// Dynamically import chart setup only on client side
+if (typeof window !== 'undefined') {
+  import('@/lib/charts/setup');
+}
 
 interface ChartDisplayProps {
   chart: ViewChart;

@@ -9,9 +9,12 @@ import { FilterOperator, IFilter, IFilterGroup } from '@/types';
 
 interface FilterBuilderProps {
   columns: string[];
+  data?: any[]; // For preview/compatibility
+  onApply?: () => void; // Called when user wants to save the filter
+  onCancel?: () => void; // Called when user wants to cancel
 }
 
-export function FilterBuilder({ columns }: FilterBuilderProps) {
+export function FilterBuilder({ columns, data, onApply, onCancel }: FilterBuilderProps) {
   const {
     addFilter,
     updateFilter,
@@ -95,6 +98,22 @@ export function FilterBuilder({ columns }: FilterBuilderProps) {
           Aggiungi Gruppo
         </Button>
       </div>
+
+      {/* Footer Actions - Only show if callbacks are provided */}
+      {(onApply || onCancel) && (
+        <div className="flex gap-2 justify-end pt-4 border-t">
+          {onCancel && (
+            <Button variant="outline" onClick={onCancel}>
+              Annulla
+            </Button>
+          )}
+          {onApply && (
+            <Button onClick={onApply}>
+              Continua
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

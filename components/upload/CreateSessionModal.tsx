@@ -87,8 +87,8 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
     }
   }, [workspaceId]);
 
-  // Handle local file upload
-  const handleLocalFile = useCallback(async (file: File) => {
+  // Handle local file selection (not upload yet)
+  const handleFileSelection = useCallback((file: File) => {
     const validation = validateFile(file);
     if (!validation.valid) {
       setError(validation.error || 'Invalid file');
@@ -96,15 +96,25 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
     }
 
     setSelectedFile(file);
+    // Auto-fill session name if empty
+    if (!sessionName.trim()) {
+      setSessionName(file.name.replace(/\.[^/.]+$/, ''));
+    }
+  }, [sessionName, setError]);
+
+  // Handle local file upload (triggered by button)
+  const handleLocalFileUpload = useCallback(async () => {
+    if (!selectedFile) return;
+
     setIsUploading(true);
     setUploadProgress(0);
     setLoading(true);
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', selectedFile);
       // Use custom session name or fall back to file name without extension
-      const finalSessionName = sessionName.trim() || file.name.replace(/\.[^/.]+$/, '');
+      const finalSessionName = sessionName.trim() || selectedFile.name.replace(/\.[^/.]+$/, '');
       formData.append('sessionName', finalSessionName);
       formData.append('workspaceId', workspaceId);
 
@@ -141,7 +151,7 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
       setIsUploading(false);
       setUploadProgress(0);
     }
-  }, [sessionName, setSession, setData, setLoading, setError, router, workspaceId, handleClose]);
+  }, [selectedFile, sessionName, setSession, setData, setLoading, setError, router, workspaceId, handleClose]);
 
   // Handle creation from existing file
   const handleCreateFromExisting = useCallback(async () => {
@@ -200,20 +210,20 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
 
       const file = e.dataTransfer.files[0];
       if (file) {
-        handleLocalFile(file);
+        handleFileSelection(file);
       }
     },
-    [handleLocalFile]
+    [handleFileSelection]
   );
 
   const handleFileInput = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-        handleLocalFile(file);
+        handleFileSelection(file);
       }
     },
-    [handleLocalFile]
+    [handleFileSelection]
   );
 
   // Render data source selection
@@ -281,82 +291,131 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
 
   // Render local file upload UI
   const renderLocalUpload = () => (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => setDataSource(null)}
+        onClick={() => {
+          setDataSource(null);
+          setSelectedFile(null);
+          setSessionName('');
+        }}
         className="mb-2"
       >
         ← Back to options
       </Button>
 
-      {/* Session Name Input */}
-      <div className="space-y-2">
-        <label htmlFor="new-session-name" className="text-sm font-medium text-slate-900">
-          Session Name (Optional)
-        </label>
-        <input
-          id="new-session-name"
-          type="text"
-          value={sessionName}
-          onChange={(e) => setSessionName(e.target.value)}
-          placeholder="Leave empty to use file name"
-          disabled={isUploading}
-          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
-        />
-        <p className="text-xs text-slate-500">
-          {sessionName.trim()
-            ? `Session will be named: "${sessionName.trim()}"`
-            : 'Will use the uploaded file name'}
-        </p>
-      </div>
-
-      <div
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragging(true);
-        }}
-        onDragLeave={() => setIsDragging(false)}
-        onDrop={handleDrop}
-        className={`
-          border-2 border-dashed rounded-lg p-12 text-center transition-colors
-          ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}
-          ${isUploading ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-        `}
-      >
-        <Upload className="mx-auto h-12 w-12 text-slate-400 mb-4" />
-        <div className="mb-4">
-          <p className="text-lg font-medium text-slate-700 mb-1">
-            Drop your file here or click to browse
-          </p>
-          <p className="text-sm text-slate-500">
-            Supports Excel (.xlsx, .xls) and CSV files up to 1GB
-          </p>
-        </div>
-        <input
-          type="file"
-          accept=".xlsx,.xls,.csv"
-          onChange={handleFileInput}
-          disabled={isUploading}
-          className="hidden"
-          id="file-input-modal"
-        />
-        <label htmlFor="file-input-modal">
-          <Button variant="outline" disabled={isUploading} asChild>
-            <span>Browse Files</span>
-          </Button>
-        </label>
-      </div>
-
-      {isUploading && selectedFile && (
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>{selectedFile.name}</span>
-            <span>{formatFileSize(selectedFile.size)}</span>
+      {!isUploading ? (
+        <>
+          {/* Session Name Input - Always visible */}
+          <div className="space-y-2">
+            <label htmlFor="new-session-name" className="text-sm font-medium text-slate-900">
+              Session Name
+            </label>
+            <input
+              id="new-session-name"
+              type="text"
+              value={sessionName}
+              onChange={(e) => setSessionName(e.target.value)}
+              placeholder="Enter session name"
+              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
-          <Progress value={uploadProgress} />
-          <p className="text-sm text-muted-foreground text-center">
+
+          {/* File Upload Area - Always visible */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={() => setIsDragging(false)}
+            onDrop={handleDrop}
+            className={`
+              border-2 border-dashed rounded-lg p-8 text-center transition-colors
+              ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-slate-300'}
+              ${selectedFile ? 'bg-green-50 border-green-500' : ''}
+              cursor-pointer
+            `}
+          >
+            {!selectedFile ? (
+              <>
+                <Upload className="mx-auto h-10 w-10 text-slate-400 mb-3" />
+                <p className="text-sm font-medium text-slate-700 mb-1">
+                  Drop your file here or click to browse
+                </p>
+                <p className="text-xs text-slate-500 mb-4">
+                  Supports Excel (.xlsx, .xls) and CSV files up to 1GB
+                </p>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleFileInput}
+                  className="hidden"
+                  id="file-input-modal"
+                />
+                <label htmlFor="file-input-modal">
+                  <Button variant="outline" size="sm" asChild>
+                    <span>Browse Files</span>
+                  </Button>
+                </label>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-100 rounded">
+                    <Upload className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-slate-900">{selectedFile.name}</p>
+                    <p className="text-xs text-slate-500">{formatFileSize(selectedFile.size)}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedFile(null);
+                  }}
+                >
+                  <X className="h-4 w-4" />
+                  Remove
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Create Button - Always visible */}
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDataSource(null);
+                setSelectedFile(null);
+                setSessionName('');
+              }}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleLocalFileUpload}
+              disabled={!selectedFile || !sessionName.trim()}
+              className="flex-1"
+            >
+              Create Session
+            </Button>
+          </div>
+        </>
+      ) : (
+        /* Upload Progress */
+        <div className="space-y-3 py-4">
+          <div className="flex justify-between text-sm">
+            <span className="font-medium">{selectedFile?.name}</span>
+            <span className="text-slate-500">{selectedFile && formatFileSize(selectedFile.size)}</span>
+          </div>
+          <Progress value={uploadProgress} className="h-2" />
+          <p className="text-sm text-slate-600 text-center">
             {uploadProgress < 100 ? 'Uploading and processing...' : 'Complete!'}
           </p>
         </div>
