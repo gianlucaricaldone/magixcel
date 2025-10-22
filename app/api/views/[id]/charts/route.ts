@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
  * GET /api/views/[id]/charts
@@ -14,7 +15,13 @@ export async function GET(
     const view = await db.getView(params.id);
     if (!view) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        {
+          success: false,
+          error: {
+            code: ERROR_CODES.NOT_FOUND,
+            message: 'View not found',
+          },
+        },
         { status: 404 }
       );
     }
@@ -26,12 +33,15 @@ export async function GET(
       success: true,
       charts,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching charts:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch charts',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to fetch charts',
+        },
       },
       { status: 500 }
     );
@@ -48,12 +58,18 @@ export async function POST(
 ) {
   try {
     const body = await request.json();
-    const { title, chart_type, config, size, position } = body;
+    const { title, chartType, config, size, position } = body;
 
     // Validate required fields
-    if (!title || !chart_type || !config) {
+    if (!title || !chartType || !config) {
       return NextResponse.json(
-        { success: false, error: 'Missing required fields: title, chart_type, config' },
+        {
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Missing required fields: title, chartType, config',
+          },
+        },
         { status: 400 }
       );
     }
@@ -62,7 +78,13 @@ export async function POST(
     const view = await db.getView(params.id);
     if (!view) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        {
+          success: false,
+          error: {
+            code: ERROR_CODES.NOT_FOUND,
+            message: 'View not found',
+          },
+        },
         { status: 404 }
       );
     }
@@ -74,7 +96,13 @@ export async function POST(
       JSON.parse(configString); // Validate it's valid JSON
     } catch (e) {
       return NextResponse.json(
-        { success: false, error: 'Invalid chart configuration JSON' },
+        {
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Invalid chart configuration JSON',
+          },
+        },
         { status: 400 }
       );
     }
@@ -82,10 +110,10 @@ export async function POST(
     // Get current chart count for position
     const currentPosition = position !== undefined ? position : view.chart_count;
 
-    // Create chart
+    // Create chart - convert camelCase to snake_case for DB
     const chart = await db.createViewChart({
       view_id: params.id,
-      chart_type,
+      chart_type: chartType, // Convert camelCase → snake_case
       title,
       config: configString,
       size: size || 'medium',
@@ -96,12 +124,15 @@ export async function POST(
       success: true,
       chart,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating chart:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create chart',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to create chart',
+        },
       },
       { status: 500 }
     );

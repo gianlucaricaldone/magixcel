@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
  * PUT /api/views/[id]/charts/reorder
@@ -16,7 +17,7 @@ export async function PUT(
     // Validate
     if (!Array.isArray(chartIds)) {
       return NextResponse.json(
-        { success: false, error: 'chartIds must be an array' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'chartIds must be an array' } },
         { status: 400 }
       );
     }
@@ -25,7 +26,7 @@ export async function PUT(
     const view = await db.getView(params.id);
     if (!view) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },
         { status: 404 }
       );
     }
@@ -37,7 +38,7 @@ export async function PUT(
     for (const chartId of chartIds) {
       if (!existingIds.has(chartId)) {
         return NextResponse.json(
-          { success: false, error: `Chart ${chartId} does not belong to this view` },
+          { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: `Chart ${chartId} does not belong to this view` } },
           { status: 400 }
         );
       }
@@ -53,12 +54,15 @@ export async function PUT(
       success: true,
       charts,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error reordering charts:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to reorder charts',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to reorder charts',
+        },
       },
       { status: 500 }
     );

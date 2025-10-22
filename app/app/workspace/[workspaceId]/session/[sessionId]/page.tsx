@@ -395,7 +395,7 @@ export default function SessionPage() {
 
     // Apply global search to views data as well
     if (debouncedGlobalSearch) {
-      filtered = applyFilters(filtered, { combinator: 'and', rules: [] }, debouncedGlobalSearch);
+      filtered = applyFilters(filtered, { combinator: 'AND', filters: [] }, debouncedGlobalSearch);
     }
 
     setViewsFilteredData(filtered);

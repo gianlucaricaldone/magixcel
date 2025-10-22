@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { IFilterConfig, ViewType } from '@/types';
 import { nanoid } from 'nanoid';
+import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
  * GET /api/views
@@ -25,12 +26,15 @@ export async function GET(request: NextRequest) {
       success: true,
       views,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching views:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch views',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to fetch views',
+        },
       },
       { status: 500 }
     );
@@ -59,35 +63,35 @@ export async function POST(request: NextRequest) {
     // Validation
     if (!name || typeof name !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Name is required and must be a string' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Name is required and must be a string' } },
         { status: 400 }
       );
     }
 
     if (!workspaceId || typeof workspaceId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Workspace ID is required' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Workspace ID is required' } },
         { status: 400 }
       );
     }
 
     if (!sessionId || typeof sessionId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'Session ID is required' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Session ID is required' } },
         { status: 400 }
       );
     }
 
     if (!filterConfig || !filterConfig.filters || !filterConfig.combinator) {
       return NextResponse.json(
-        { success: false, error: 'Invalid filter configuration' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid filter configuration' } },
         { status: 400 }
       );
     }
 
     if (!['filters_only', 'snapshot'].includes(viewType)) {
       return NextResponse.json(
-        { success: false, error: 'Invalid view type. Must be "filters_only" or "snapshot"' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid view type. Must be "filters_only" or "snapshot"' } },
         { status: 400 }
       );
     }
@@ -95,7 +99,7 @@ export async function POST(request: NextRequest) {
     // For snapshot views, snapshot data is required
     if (viewType === 'snapshot' && !snapshotData) {
       return NextResponse.json(
-        { success: false, error: 'Snapshot data is required for snapshot views' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Snapshot data is required for snapshot views' } },
         { status: 400 }
       );
     }
@@ -106,7 +110,7 @@ export async function POST(request: NextRequest) {
       const maxSize = 10 * 1024 * 1024; // 10MB
       if (dataSize > maxSize) {
         return NextResponse.json(
-          { success: false, error: 'Snapshot data exceeds 10MB limit' },
+          { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Snapshot data exceeds 10MB limit' } },
           { status: 413 }
         );
       }
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
     const existing = await db.getViewByName(name);
     if (existing) {
       return NextResponse.json(
-        { success: false, error: 'A view with this name already exists' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'A view with this name already exists' } },
         { status: 409 }
       );
     }
@@ -149,12 +153,15 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(response);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error creating view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to create view',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to create view',
+        },
       },
       { status: 500 }
     );

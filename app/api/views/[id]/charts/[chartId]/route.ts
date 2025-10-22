@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ERROR_CODES } from '@/lib/utils/constants';
+import { ViewChart } from '@/types/charts';
 
 /**
  * GET /api/views/[id]/charts/[chartId]
@@ -14,7 +16,7 @@ export async function GET(
 
     if (!chart) {
       return NextResponse.json(
-        { success: false, error: 'Chart not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'Chart not found' } },
         { status: 404 }
       );
     }
@@ -22,7 +24,7 @@ export async function GET(
     // Verify chart belongs to this view
     if (chart.view_id !== params.id) {
       return NextResponse.json(
-        { success: false, error: 'Chart does not belong to this view' },
+        { success: false, error: { code: ERROR_CODES.UNAUTHORIZED, message: 'Chart does not belong to this view' } },
         { status: 403 }
       );
     }
@@ -31,12 +33,15 @@ export async function GET(
       success: true,
       chart,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching chart:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch chart',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to fetch chart',
+        },
       },
       { status: 500 }
     );
@@ -59,7 +64,7 @@ export async function PUT(
     const existing = await db.getViewChart(params.chartId);
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: 'Chart not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'Chart not found' } },
         { status: 404 }
       );
     }
@@ -67,13 +72,13 @@ export async function PUT(
     // Verify chart belongs to this view
     if (existing.view_id !== params.id) {
       return NextResponse.json(
-        { success: false, error: 'Chart does not belong to this view' },
+        { success: false, error: { code: ERROR_CODES.UNAUTHORIZED, message: 'Chart does not belong to this view' } },
         { status: 403 }
       );
     }
 
     // Build update object
-    const updates: any = {};
+    const updates: Partial<ViewChart> = {};
     if (title !== undefined) updates.title = title;
     if (size !== undefined) updates.size = size;
     if (position !== undefined) updates.position = position;
@@ -86,7 +91,7 @@ export async function PUT(
         updates.config = configString;
       } catch (e) {
         return NextResponse.json(
-          { success: false, error: 'Invalid chart configuration JSON' },
+          { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid chart configuration JSON' } },
           { status: 400 }
         );
       }
@@ -99,12 +104,15 @@ export async function PUT(
       success: true,
       chart,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating chart:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to update chart',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to update chart',
+        },
       },
       { status: 500 }
     );
@@ -124,7 +132,7 @@ export async function DELETE(
     const existing = await db.getViewChart(params.chartId);
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: 'Chart not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'Chart not found' } },
         { status: 404 }
       );
     }
@@ -132,7 +140,7 @@ export async function DELETE(
     // Verify chart belongs to this view
     if (existing.view_id !== params.id) {
       return NextResponse.json(
-        { success: false, error: 'Chart does not belong to this view' },
+        { success: false, error: { code: ERROR_CODES.UNAUTHORIZED, message: 'Chart does not belong to this view' } },
         { status: 403 }
       );
     }
@@ -143,12 +151,15 @@ export async function DELETE(
       success: true,
       message: 'Chart deleted successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error deleting chart:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete chart',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to delete chart',
+        },
       },
       { status: 500 }
     );

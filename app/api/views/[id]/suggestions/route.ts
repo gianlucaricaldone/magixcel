@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { suggestCharts } from '@/lib/charts/suggestions';
+import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
  * GET /api/views/[id]/suggestions
@@ -15,7 +16,7 @@ export async function GET(
     const view = await db.getView(params.id);
     if (!view) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },
         { status: 404 }
       );
     }
@@ -47,7 +48,7 @@ export async function GET(
       const session = await db.getSession(view.session_id);
       if (!session) {
         return NextResponse.json(
-          { success: false, error: 'Session not found' },
+          { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'Session not found' } },
           { status: 404 }
         );
       }
@@ -67,12 +68,15 @@ export async function GET(
       suggestions: [],
       message: 'This view has no associated data for suggestions',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating suggestions:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to generate suggestions',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to generate suggestions',
+        },
       },
       { status: 500 }
     );
@@ -93,7 +97,7 @@ export async function POST(
 
     if (!data || !Array.isArray(data) || data.length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Invalid or empty data array' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid or empty data array' } },
         { status: 400 }
       );
     }
@@ -105,12 +109,15 @@ export async function POST(
       success: true,
       suggestions,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error generating suggestions:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to generate suggestions',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to generate suggestions',
+        },
       },
       { status: 500 }
     );

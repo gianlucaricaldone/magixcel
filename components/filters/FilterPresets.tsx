@@ -247,7 +247,7 @@ export function FilterPresets() {
               <div className="text-center py-8">
                 <FolderOpen className="h-12 w-12 mx-auto text-muted-foreground mb-3" />
                 <p className="text-sm text-muted-foreground">No views saved yet</p>
-                <p className="text-xs text-muted-foreground mt-1">Create filters and click "Save View" to get started</p>
+                <p className="text-xs text-muted-foreground mt-1">Create filters and click &quot;Save View&quot; to get started</p>
               </div>
             ) : (
               <div className="space-y-6">

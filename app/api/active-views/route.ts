@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
  * GET /api/active-views?sessionId=xxx&sheetName=xxx
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     if (!sessionId) {
       return NextResponse.json(
-        { success: false, error: 'sessionId is required' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'sessionId is required' } },
         { status: 400 }
       );
     }
@@ -27,12 +28,15 @@ export async function GET(request: NextRequest) {
       success: true,
       activeViews,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching active views:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch active views',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to fetch active views',
+        },
       },
       { status: 500 }
     );
@@ -51,14 +55,14 @@ export async function POST(request: NextRequest) {
     // Validation
     if (!sessionId || typeof sessionId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'sessionId is required' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'sessionId is required' } },
         { status: 400 }
       );
     }
 
     if (!viewId || typeof viewId !== 'string') {
       return NextResponse.json(
-        { success: false, error: 'viewId is required' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'viewId is required' } },
         { status: 400 }
       );
     }
@@ -70,12 +74,15 @@ export async function POST(request: NextRequest) {
       success: true,
       activeView,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error activating view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to activate view',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to activate view',
+        },
       },
       { status: 500 }
     );
@@ -95,7 +102,7 @@ export async function DELETE(request: NextRequest) {
 
     if (!sessionId || !viewId) {
       return NextResponse.json(
-        { success: false, error: 'sessionId and viewId are required' },
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'sessionId and viewId are required' } },
         { status: 400 }
       );
     }
@@ -106,12 +113,15 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: 'View deactivated successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error deactivating view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to deactivate view',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to deactivate view',
+        },
       },
       { status: 500 }
     );

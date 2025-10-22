@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { ERROR_CODES } from '@/lib/utils/constants';
+import { IWorkspace } from '@/types/database';
 
 /**
  * GET /api/workspace/[id]
@@ -32,14 +33,14 @@ export async function GET(
       success: true,
       workspace,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get workspace error:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
-          code: ERROR_CODES.PROCESSING_ERROR,
-          message: error.message || 'Failed to get workspace',
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to get workspace',
         },
       },
       { status: 500 }
@@ -90,7 +91,7 @@ export async function PUT(
     }
 
     // Update workspace
-    const updates: any = {};
+    const updates: Partial<IWorkspace> = {};
     if (name !== undefined) updates.name = name.trim();
     if (description !== undefined) updates.description = description?.trim() || null;
     if (color !== undefined) updates.color = color;
@@ -102,14 +103,14 @@ export async function PUT(
       success: true,
       workspace,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Update workspace error:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
-          code: ERROR_CODES.PROCESSING_ERROR,
-          message: error.message || 'Failed to update workspace',
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to update workspace',
         },
       },
       { status: 500 }
@@ -164,14 +165,14 @@ export async function DELETE(
       success: true,
       message: 'Workspace deleted successfully',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Delete workspace error:', error);
     return NextResponse.json(
       {
         success: false,
         error: {
-          code: ERROR_CODES.PROCESSING_ERROR,
-          message: error.message || 'Failed to delete workspace',
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to delete workspace',
         },
       },
       { status: 500 }

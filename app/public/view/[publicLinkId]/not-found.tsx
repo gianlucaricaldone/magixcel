@@ -11,7 +11,7 @@ export default function NotFound() {
           </div>
           <h1 className="text-2xl font-bold text-slate-900 mb-2">View Not Found</h1>
           <p className="text-slate-600 mb-6">
-            The view you're looking for doesn't exist or has been removed.
+            The view you&apos;re looking for doesn&apos;t exist or has been removed.
           </p>
           <Link
             href="/"

@@ -286,7 +286,7 @@ export function EditViewDrawer({
               <div className="bg-slate-50 rounded-lg p-4">
                 <p className="text-xs text-slate-600 mb-2">
                   This view has {filterCount} filter{filterCount > 1 ? 's' : ''} configured.
-                  Click "Edit Filters" to modify them.
+                  Click &quot;Edit Filters&quot; to modify them.
                 </p>
               </div>
             </div>

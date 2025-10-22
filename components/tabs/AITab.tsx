@@ -61,7 +61,7 @@ export function AITab() {
         {/* CTA */}
         <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
           <p className="text-sm text-amber-800 mb-3">
-            <strong>🚧 Coming Soon:</strong> AI Insights is currently in development. We're building amazing features to help you understand your data better.
+            <strong>🚧 Coming Soon:</strong> AI Insights is currently in development. We&apos;re building amazing features to help you understand your data better.
           </p>
           <Button variant="outline" size="sm" disabled>
             <Sparkles className="h-4 w-4 mr-2" />

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { ERROR_CODES } from '@/lib/utils/constants';
+import { IView } from '@/types/database';
 
 /**
  * GET /api/views/[id]
@@ -14,7 +16,7 @@ export async function GET(
 
     if (!view) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },
         { status: 404 }
       );
     }
@@ -23,12 +25,15 @@ export async function GET(
       success: true,
       view,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error fetching view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to fetch view',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to fetch view',
+        },
       },
       { status: 500 }
     );
@@ -51,7 +56,7 @@ export async function PUT(
     const existing = await db.getView(params.id);
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },
         { status: 404 }
       );
     }
@@ -61,14 +66,14 @@ export async function PUT(
       const nameConflict = await db.getViewByName(name);
       if (nameConflict && nameConflict.id !== params.id) {
         return NextResponse.json(
-          { success: false, error: 'A view with this name already exists' },
+          { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'A view with this name already exists' } },
           { status: 409 }
         );
       }
     }
 
     // Build update object
-    const updates: any = {};
+    const updates: Partial<IView> = {};
     if (name !== undefined) updates.name = name;
     if (description !== undefined) updates.description = description;
     if (category !== undefined) updates.category = category;
@@ -86,12 +91,15 @@ export async function PUT(
       success: true,
       view,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error updating view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to update view',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to update view',
+        },
       },
       { status: 500 }
     );
@@ -111,7 +119,7 @@ export async function DELETE(
     const existing = await db.getView(params.id);
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: 'View not found' },
+        { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },
         { status: 404 }
       );
     }
@@ -122,12 +130,15 @@ export async function DELETE(
       success: true,
       message: 'View deleted successfully',
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error deleting view:', error);
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Failed to delete view',
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to delete view',
+        },
       },
       { status: 500 }
     );

@@ -155,7 +155,6 @@ export function AggregatedViewCharts({
                   <ChartDisplay
                     chart={chart}
                     data={data}
-                    columns={columns}
                     onEdit={() => {
                       // Edit functionality can be added here if needed
                       console.log('Edit chart:', chart.id);
