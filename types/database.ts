@@ -71,6 +71,7 @@ export interface IView {
   snapshot_data?: string; // JSON string of data rows (if view_type is 'snapshot')
   is_public: boolean;
   public_link_id?: string; // Unique link ID for public sharing
+  is_default?: number; // 1 if this is the default "All Data" view for the session, 0 otherwise
   created_at: string;
   updated_at: string;
   last_accessed_at?: string;

@@ -639,6 +639,7 @@ export default function SessionPage() {
             views={views}
             activeViewIds={activeViewIds}
             sessionId={sessionId}
+            workspaceId={workspaceId}
             activeSheet={activeSheet}
             data={viewsFilteredData}
             columns={columns}

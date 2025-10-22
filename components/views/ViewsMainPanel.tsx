@@ -13,6 +13,8 @@ interface ViewsMainPanelProps {
   columnCount: number;
   activeViewIds: string[];
   views: IView[];
+  sessionId: string;
+  workspaceId: string;
 }
 
 type SubTab = 'data' | 'charts';
@@ -23,6 +25,8 @@ export function ViewsMainPanel({
   columnCount,
   activeViewIds,
   views,
+  sessionId,
+  workspaceId,
 }: ViewsMainPanelProps) {
   const [activeSubTab, setActiveSubTab] = useState<SubTab>('data');
 
@@ -127,6 +131,8 @@ export function ViewsMainPanel({
               activeViews={views.filter((v) => activeViewIds.includes(v.id))}
               data={data}
               columns={columns}
+              sessionId={sessionId}
+              workspaceId={workspaceId}
             />
           </div>
         )}

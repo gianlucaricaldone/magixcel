@@ -20,6 +20,8 @@ interface AggregatedViewChartsProps {
   activeViews: IView[];
   data: any[];
   columns: string[];
+  sessionId: string; // Needed to load default view if no views selected
+  workspaceId: string; // Needed to create default view if it doesn't exist
 }
 
 interface ViewWithCharts {
@@ -31,12 +33,34 @@ export function AggregatedViewCharts({
   activeViews,
   data,
   columns,
+  sessionId,
+  workspaceId,
 }: AggregatedViewChartsProps) {
   const [viewCharts, setViewCharts] = useState<ViewWithCharts[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedViewForChart, setSelectedViewForChart] = useState<IView | null>(null);
   const [isViewSelectorOpen, setIsViewSelectorOpen] = useState(false);
   const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
+  const [defaultView, setDefaultView] = useState<IView | null>(null);
+
+  // Load default "All Data" view
+  useEffect(() => {
+    const loadDefaultView = async () => {
+      try {
+        const response = await fetch(`/api/views?sessionId=${sessionId}`);
+        const result = await response.json();
+
+        if (result.success && result.views) {
+          const allDataView = result.views.find((v: IView) => v.is_default === 1);
+          setDefaultView(allDataView || null);
+        }
+      } catch (error) {
+        console.error('Error loading default view:', error);
+      }
+    };
+
+    loadDefaultView();
+  }, [sessionId]);
 
   // Load charts for all active views
   useEffect(() => {
@@ -82,7 +106,15 @@ export function AggregatedViewCharts({
 
   // Handlers for chart creation
   const handleAddChartClick = () => {
-    if (activeViews.length === 1) {
+    if (activeViews.length === 0) {
+      // No views selected → use default "All Data" view
+      if (defaultView) {
+        setSelectedViewForChart(defaultView);
+        setIsChartBuilderOpen(true);
+      } else {
+        alert('Default view not found. Please refresh the page.');
+      }
+    } else if (activeViews.length === 1) {
       // Only 1 view selected → open ChartBuilder directly
       setSelectedViewForChart(activeViews[0]);
       setIsChartBuilderOpen(true);
@@ -175,30 +207,28 @@ export function AggregatedViewCharts({
               : 'Check views from the sidebar to see their charts'}
           </p>
 
-          {/* Action Buttons */}
-          {activeViews.length > 0 && (
-            <div className="flex gap-3 justify-center">
-              <Button onClick={handleAddChartClick}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Chart
-              </Button>
+          {/* Action Buttons - Always visible! */}
+          <div className="flex gap-3 justify-center">
+            <Button onClick={handleAddChartClick}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Chart
+            </Button>
 
-              <Button
-                variant="outline"
-                disabled
-                className="relative"
+            <Button
+              variant="outline"
+              disabled
+              className="relative"
+            >
+              <Sparkles className="h-4 w-4 mr-2" />
+              Magic Charts
+              <Badge
+                variant="secondary"
+                className="ml-2 bg-amber-100 text-amber-800 border-amber-300 text-xs px-1.5 py-0"
               >
-                <Sparkles className="h-4 w-4 mr-2" />
-                Magic Charts
-                <Badge
-                  variant="secondary"
-                  className="ml-2 bg-amber-100 text-amber-800 border-amber-300 text-xs px-1.5 py-0"
-                >
-                  Soon
-                </Badge>
-              </Button>
-            </div>
-          )}
+                Soon
+              </Badge>
+            </Button>
+          </div>
         </div>
       </div>
     );

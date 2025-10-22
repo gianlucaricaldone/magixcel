@@ -64,6 +64,17 @@ export async function POST(request: NextRequest) {
         file_type: referenceSession.file_type,
       });
 
+      // Create default "All Data" view for the new session
+      await db.createView({
+        workspace_id: workspaceId,
+        session_id: newSession.id,
+        name: 'All Data',
+        description: 'View all data without any filters',
+        filter_config: JSON.stringify({ filters: [], combinator: 'AND' }),
+        category: 'System',
+        is_default: 1,
+      });
+
       // Get the file record from reference session
       const existingFile = await db.getFileBySession(referenceSession.id);
       if (existingFile) {
@@ -216,6 +227,17 @@ export async function POST(request: NextRequest) {
       column_count: metadata.columnCount,
       file_size: metadata.fileSize,
       file_type: metadata.fileType,
+    });
+
+    // Create default "All Data" view for the new session
+    await db.createView({
+      workspace_id: workspaceId,
+      session_id: session.id,
+      name: 'All Data',
+      description: 'View all data without any filters',
+      filter_config: JSON.stringify({ filters: [], combinator: 'AND' }),
+      category: 'System',
+      is_default: 1,
     });
 
     // Store file

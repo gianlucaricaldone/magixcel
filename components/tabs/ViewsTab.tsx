@@ -10,6 +10,7 @@ interface ViewsTabProps {
   views: IView[];
   activeViewIds: string[]; // Changed: multi-selection instead of single currentView
   sessionId: string;
+  workspaceId: string;
   activeSheet: string | null;
   data: any[];
   columns: string[];
@@ -26,6 +27,7 @@ export function ViewsTab({
   views,
   activeViewIds,
   sessionId,
+  workspaceId,
   activeSheet,
   data,
   columns,
@@ -68,6 +70,8 @@ export function ViewsTab({
           columnCount={columnCount}
           activeViewIds={activeViewIds}
           views={views}
+          sessionId={sessionId}
+          workspaceId={workspaceId}
         />
       </div>
 
