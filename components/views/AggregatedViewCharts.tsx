@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { ViewChart } from '@/types/charts';
 import { IView } from '@/types/database';
 import { ChartDisplay } from '@/components/charts/ChartDisplay';
-import { Loader2, BarChart3 } from 'lucide-react';
+import { Loader2, BarChart3, Plus, Sparkles } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 interface AggregatedViewChartsProps {
   activeViews: IView[];
@@ -92,11 +93,41 @@ export function AggregatedViewCharts({
           <h3 className="text-lg font-semibold text-slate-900 mb-2">
             No Charts Available
           </h3>
-          <p className="text-sm text-slate-600">
+          <p className="text-sm text-slate-600 mb-6">
             {activeViews.length > 0
-              ? 'The selected views don\'t have any charts yet. Click on a view name to add charts.'
+              ? 'The selected views don&apos;t have any charts yet. Create your first chart to visualize the data.'
               : 'Check views from the sidebar to see their charts'}
           </p>
+
+          {/* Action Buttons */}
+          {activeViews.length > 0 && (
+            <div className="flex gap-3 justify-center">
+              <Button
+                onClick={() => {
+                  // TODO: Open chart builder modal
+                  console.log('Add Chart clicked');
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Chart
+              </Button>
+
+              <Button
+                variant="outline"
+                disabled
+                className="relative"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Magic Charts
+                <Badge
+                  variant="secondary"
+                  className="ml-2 bg-amber-100 text-amber-800 border-amber-300 text-xs px-1.5 py-0"
+                >
+                  Soon
+                </Badge>
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -115,9 +146,37 @@ export function AggregatedViewCharts({
               {totalCharts} chart{totalCharts > 1 ? 's' : ''} total
             </p>
           </div>
-          <Badge variant="secondary">
-            {activeViews.map((v) => v.name).join(' + ')}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary">
+              {activeViews.map((v) => v.name).join(' + ')}
+            </Badge>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  // TODO: Open chart builder modal
+                  console.log('Add Chart clicked');
+                }}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Chart
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Magic Charts
+                <Badge
+                  variant="secondary"
+                  className="ml-2 bg-amber-100 text-amber-800 border-amber-300 text-xs px-1.5 py-0"
+                >
+                  Soon
+                </Badge>
+              </Button>
+            </div>
+          </div>
         </div>
       </div>
 
