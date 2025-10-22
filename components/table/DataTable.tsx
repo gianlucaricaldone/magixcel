@@ -7,15 +7,19 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface DataTableProps {
   columns: string[];
+  data?: any[]; // Optional: if provided, use this instead of store data
 }
 
-export function DataTable({ columns }: DataTableProps) {
+export function DataTable({ columns, data: propData }: DataTableProps) {
   const {
-    filteredData,
+    filteredData: storeData,
     sortColumn,
     sortDirection,
     setSorting,
   } = useDataStore();
+
+  // Use prop data if provided, otherwise use store data
+  const filteredData = propData !== undefined ? propData : storeData;
 
   const parentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);

@@ -329,7 +329,7 @@ export function ActiveViewPanel({
               filteredRows={data.length}
             />
             <div className="flex-1 overflow-hidden">
-              <DataTable columns={columns} />
+              <DataTable columns={columns} data={data} />
             </div>
           </div>
         ) : (

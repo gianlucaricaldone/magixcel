@@ -195,9 +195,12 @@ export default function SessionPage() {
       });
 
       const result = await response.json();
+
       if (result.success) {
         // Reload ALL views for workspace (views are GLOBAL)
         await loadViews(workspaceId, sessionId);
+      } else {
+        console.error('Update view failed:', result.error);
       }
     } catch (error) {
       console.error('Error updating view:', error);
@@ -237,32 +240,36 @@ export default function SessionPage() {
   };
 
   const handleCloseFilterBuilder = async () => {
+    const viewIdToUpdate = editingViewId;
+
+    // Close modal first
     setShowFilterBuilder(false);
+    setEditingViewId(null);
 
     // If we were editing a view, save the updated filters
-    if (editingViewId) {
+    if (viewIdToUpdate) {
       const filterConfig = getFilterConfig();
 
       try {
-        const response = await fetch(`/api/views/${editingViewId}`, {
+        const response = await fetch(`/api/views/${viewIdToUpdate}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            filter_config: JSON.stringify(filterConfig),
+            filterConfig: filterConfig, // API expects camelCase, not snake_case
           }),
         });
 
         const result = await response.json();
+
         if (result.success) {
           // Reload ALL views for workspace (views are GLOBAL)
           await loadViews(workspaceId, sessionId);
+        } else {
+          console.error('Failed to save filters:', result.error);
         }
       } catch (error) {
         console.error('Error updating view filters:', error);
       }
-
-      // Clear editing state
-      setEditingViewId(null);
     }
   };
 

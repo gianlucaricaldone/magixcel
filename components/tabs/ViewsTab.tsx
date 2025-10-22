@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { IView, IActiveView } from '@/types/database';
+import { useState } from 'react';
+import { IView } from '@/types/database';
 import { ViewsSidebar } from '@/components/views/ViewsSidebar';
-import { ActiveViewPanel } from '@/components/views/ActiveViewPanel';
-import { Layers, CheckSquare } from 'lucide-react';
+import { ViewsMainPanel } from '@/components/views/ViewsMainPanel';
+import { EditViewDrawer } from '@/components/views/EditViewDrawer';
 
 interface ViewsTabProps {
   views: IView[];
@@ -37,71 +37,69 @@ export function ViewsTab({
   onEditFilters,
   chartCounts,
 }: ViewsTabProps) {
-  const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
+  const [editingViewId, setEditingViewId] = useState<string | null>(null);
 
-  // Get selected view for detail panel
-  const selectedView = views.find(v => v.id === selectedViewId) || null;
+  // Get editing view
+  const editingView = views.find(v => v.id === editingViewId) || null;
+
+  // Create a key that includes the view's updated_at to force re-render when view changes
+  const drawerKey = editingView
+    ? `${editingView.id}-${editingView.updated_at}`
+    : 'closed';
 
   return (
-    <div className="flex-1 flex overflow-hidden">
-      {/* Sidebar with multi-select checkboxes */}
-      <ViewsSidebar
-        views={views}
-        activeViewIds={activeViewIds}
-        selectedViewId={selectedViewId}
-        onToggleView={onToggleView}
-        onSelectView={setSelectedViewId}
-        onCreateView={onCreateView}
-        chartCounts={chartCounts}
-      />
+    <>
+      <div className="flex-1 flex overflow-hidden">
+        {/* Sidebar with multi-select checkboxes */}
+        <ViewsSidebar
+          views={views}
+          activeViewIds={activeViewIds}
+          selectedViewId={editingViewId}
+          onToggleView={onToggleView}
+          onSelectView={setEditingViewId}
+          onCreateView={onCreateView}
+          chartCounts={chartCounts}
+        />
 
-      {/* Main Panel - Shows selected view for editing */}
-      {selectedView ? (
-        <ActiveViewPanel
-          view={selectedView}
+        {/* Main Panel - Always visible with Data/Charts tabs */}
+        <ViewsMainPanel
           data={data}
           columns={columns}
           columnCount={columnCount}
-          onUpdateView={(updates) => onUpdateView(selectedView.id, updates)}
-          onDeleteView={() => {
-            onDeleteView(selectedView.id);
-            setSelectedViewId(null);
-          }}
-          onEditFilters={() => onEditFilters(selectedView.id)}
+          activeViewIds={activeViewIds}
+          views={views}
         />
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-slate-50">
-          <div className="text-center max-w-md p-8">
-            {activeViewIds.length > 0 ? (
-              <>
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
-                  <CheckSquare className="h-8 w-8 text-green-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                  {activeViewIds.length} View{activeViewIds.length > 1 ? 's' : ''} Active
-                </h3>
-                <p className="text-slate-600 mb-4">
-                  Filters from active views are applied in AND.
-                  Click on a view name to see details and charts.
-                </p>
-              </>
-            ) : (
-              <>
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                  <Layers className="h-8 w-8 text-blue-600" />
-                </div>
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">
-                  No Views Active
-                </h3>
-                <p className="text-slate-600 mb-4">
-                  Check views from the sidebar to apply their filters.
-                  Click on a view name to see details and charts.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
+      </div>
+
+      {/* Edit View Drawer - Slides from right */}
+      <EditViewDrawer
+        key={drawerKey}
+        view={editingView}
+        isOpen={editingViewId !== null}
+        onClose={() => setEditingViewId(null)}
+        onUpdateView={(updates) => {
+          if (editingViewId) {
+            onUpdateView(editingViewId, updates);
+          }
+        }}
+        onDeleteView={() => {
+          if (editingViewId) {
+            onDeleteView(editingViewId);
+            setEditingViewId(null);
+          }
+        }}
+        onEditFilters={() => {
+          if (editingViewId) {
+            // Close drawer before opening filter modal
+            const viewId = editingViewId;
+            setEditingViewId(null);
+            // Small delay to let drawer close
+            setTimeout(() => {
+              onEditFilters(viewId);
+            }, 300);
+          }
+        }}
+      />
+    </>
   );
 }
