@@ -50,7 +50,9 @@
       "Bash(git commit:*)",
       "Bash(cat:*)",
       "Bash(npm install:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(chmod:*)",
+      "Bash(./scripts/migrate-dev-db.sh:*)"
     ],
     "deny": [],
     "ask": []
