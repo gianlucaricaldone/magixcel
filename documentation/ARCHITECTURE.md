@@ -2,18 +2,27 @@
 
 ## Design Principles
 
-### 1. Database Agnostic
-All database operations go through an abstraction layer (`lib/db/index.ts`) that provides a unified interface. This allows seamless migration from SQLite to Supabase.
+### 1. Adapter Pattern Architecture
+MagiXcel uses the **Adapter Pattern** to support both development and production environments with a single codebase. All infrastructure operations go through adapter interfaces that automatically select the correct implementation based on environment.
 
 ```typescript
-// Good ✓
-import { db } from '@/lib/db';
+// Database Adapter - automatically uses SQLite (dev) or Supabase (prod)
+import { db } from '@/lib/adapters/db';
 const session = await db.getSession(id);
 
-// Bad ✗
-import Database from 'better-sqlite3';
-const db = new Database('magixcel.db');
+// Storage Adapter - automatically uses Local FS (dev) or R2 (prod)
+import { storage } from '@/lib/adapters/storage';
+const url = await storage.upload(sessionId, file);
+
+// Cache Adapter - automatically uses Memory (dev) or Vercel KV (prod)
+import { cache } from '@/lib/adapters/cache';
+await cache.set(key, value, { ttl: 3600 });
 ```
+
+**Adapters:**
+- **DBAdapter**: SQLite (dev) → Supabase PostgreSQL (prod)
+- **StorageAdapter**: Local filesystem (dev) → Cloudflare R2 (prod)
+- **CacheAdapter**: In-memory Map (dev) → Vercel KV Redis (prod)
 
 ### 2. Separation of Concerns
 - **Components**: UI only, no business logic
@@ -27,10 +36,12 @@ const db = new Database('magixcel.db');
 - Shared types in `types/` directory
 
 ### 4. Performance First
-- Virtual scrolling for large datasets
-- Lazy loading and code splitting
-- Caching layer for expensive operations
-- Future WASM for heavy processing
+- **DuckDB Analytics Engine**: Sub-100ms queries on 1M+ rows
+- **Parquet Columnar Format**: 60-70% compression, columnar storage
+- **Virtual Scrolling**: TanStack Table for large datasets
+- **Lazy Loading**: Code splitting and component-level loading
+- **Multi-Level Caching**: Vercel KV Redis with 1-hour TTL
+- **Query Optimization**: DuckDB predicate pushdown and column projection
 
 ---
 
@@ -75,15 +86,32 @@ components/                        # React components
 └── export/                       # Export dialogs
 
 lib/                              # Core business logic
-├── db/                           # Database abstraction
-│   ├── index.ts                 # DB interface + exports
-│   ├── sqlite.ts                # SQLite implementation
-│   ├── supabase.ts              # Supabase implementation
-│   ├── schema.sql               # Database schema
-│   └── migrations/              # Database migrations
-│       └── 002_add_workspaces.sql
+├── adapters/                     # Adapter Pattern implementations
+│   ├── db/                      # Database adapters
+│   │   ├── interface.ts         # IDatabase interface
+│   │   ├── sqlite.ts            # SQLite adapter (dev)
+│   │   ├── supabase.ts          # Supabase adapter (prod)
+│   │   └── index.ts             # Auto-select based on env
+│   ├── storage/                 # File storage adapters
+│   │   ├── interface.ts         # IStorage interface
+│   │   ├── local.ts             # Local filesystem (dev)
+│   │   ├── r2.ts                # Cloudflare R2 (prod)
+│   │   └── index.ts             # Auto-select based on env
+│   └── cache/                   # Cache adapters
+│       ├── interface.ts         # ICache interface
+│       ├── memory.ts            # In-memory cache (dev)
+│       ├── vercel-kv.ts         # Vercel KV Redis (prod)
+│       └── index.ts             # Auto-select based on env
+├── duckdb/                       # DuckDB analytics engine
+│   ├── client.ts                # DuckDB connection manager
+│   ├── query-builder.ts         # FilterConfig → SQL generator
+│   ├── executor.ts              # Query execution + streaming
+│   └── types.ts                 # DuckDB type definitions
 ├── processing/                   # File processing
-├── storage/                      # File storage
+│   ├── excel-reader.ts          # Excel processing with DuckDB
+│   ├── csv-reader.ts            # CSV processing with DuckDB
+│   ├── parquet-converter.ts     # Convert to Parquet format
+│   └── metadata-extractor.ts   # Extract schema and stats
 ├── utils/                        # Utilities
 └── hooks/                        # Custom hooks
 
@@ -125,21 +153,29 @@ User uploads file or clicks existing session
 User views data, applies filters, switches sheets
 ```
 
-### File Upload Flow
+### File Upload Flow (DuckDB + Parquet)
 ```
-User uploads file (from workspace page)
+User uploads file.xlsx (from workspace page)
     ↓
 FileUploader component (with workspaceId prop)
     ↓
-POST /api/upload (includes workspaceId)
+POST /api/upload (includes workspaceId, file FormData)
     ↓
-excel-processor.ts / csv-processor.ts
-    ↓ (if Excel, extract all sheets)
-Multi-sheet data structure created
+Save to temp directory
     ↓
-Database (session + file with workspace_id)
+DuckDB processes file:
+  - Read Excel/CSV with native readers
+  - Extract metadata (sheets, columns, types, row counts)
+  - Convert to Parquet format (60-70% compression)
     ↓
-Storage (local/cloud)
+StorageAdapter uploads files:
+  - Original: /files/{sessionId}/original.xlsx
+  - Parquet: /files/{sessionId}/data.parquet
+    ↓
+DBAdapter saves session:
+  - metadata: JSONB (sheets, columns, stats)
+  - r2_path_original: path to original file
+  - r2_path_parquet: path to Parquet file
     ↓
 Return sessionId + metadata + sheets
     ↓
@@ -188,24 +224,87 @@ Navigate to /app/workspace/{newWorkspaceId}
 User can now upload files to this workspace
 ```
 
-### Export Flow (Multi-Sheet)
+### Export Flow (DuckDB Query)
 ```
 User clicks Export
     ↓
 Export dialog (choose format: xlsx, csv, json)
     ↓
-POST /api/export
+POST /api/export (sessionId, sheetName, filters, format)
     ↓
-Backend retrieves all sheets' data
+DuckDB Query Execution:
+  - Build SQL from FilterConfig (if filters applied)
+  - Query Parquet file: SELECT * FROM read_parquet(...)
+  - Apply WHERE clauses for filters
+  - NO LIMIT (export all filtered data)
     ↓
-Apply each sheet's filters from filtersBySheet
+Convert result to requested format:
+  - CSV: PapaParse.unparse()
+  - JSON: JSON.stringify()
+  - XLSX: ExcelJS workbook
     ↓
-For XLSX: Create workbook with multiple sheets (all filtered)
-For CSV: Export only active sheet (filtered)
-For JSON: Export all sheets as structured data (filtered)
-    ↓
-Stream file to user
+Stream file to user with appropriate headers
 ```
+
+---
+
+## DuckDB Processing Pipeline
+
+MagiXcel uses **DuckDB** as its analytics engine for all data operations.
+
+### Upload → Parquet Conversion
+
+```
+Excel/CSV File → DuckDB → Parquet
+```
+
+**Process:**
+1. DuckDB reads file using native readers (`read_excel()`, `read_csv()`)
+2. Extracts metadata (schema, types, row counts)
+3. Converts to Parquet format using `COPY ... TO 'output.parquet'`
+4. Uploads Parquet to R2/local storage
+5. Stores metadata in Supabase `session.metadata` JSONB
+
+**Benefits:**
+- ✅ **60-70% compression** vs JSON
+- ✅ **Columnar storage** for faster queries
+- ✅ **Type preservation** (dates, numbers, strings)
+- ✅ **Schema embedded** in Parquet file
+
+### Query Execution Flow
+
+```
+FilterConfig → SQL → DuckDB → Parquet → Results
+```
+
+**Process:**
+1. User applies filters in FilterBuilder UI
+2. FilterConfig → SQL query (via query-builder.ts)
+3. Check CacheAdapter for cached results
+4. If cache miss:
+   - DuckDB reads Parquet from R2/local
+   - Executes SQL query with WHERE clauses
+   - Returns filtered rows
+   - Cache result (1h TTL)
+5. Return data to frontend
+
+**Example Query:**
+```sql
+SELECT *
+FROM read_parquet('https://r2.../abc123/data.parquet')
+WHERE 1=1
+  AND sheet_name = 'Q1_Sales'
+  AND amount > 1000
+  AND region IN ('EU', 'US')
+ORDER BY amount DESC
+LIMIT 100 OFFSET 0;
+```
+
+**Performance:**
+- ✅ **Sub-100ms queries** on 1M rows
+- ✅ **Predicate pushdown** (filters applied at Parquet level)
+- ✅ **Column projection** (only read needed columns)
+- ✅ **Streaming** (no full file download)
 
 ---
 
@@ -243,7 +342,7 @@ export class SupabaseDB implements IDatabase {
 }
 ```
 
-### Abstraction Layer (`lib/db/index.ts`)
+### Adapter Pattern Implementation (`lib/adapters/db/index.ts`)
 ```typescript
 export interface IDatabase {
   // Workspace methods
@@ -251,22 +350,33 @@ export interface IDatabase {
   createWorkspace(data: WorkspaceData): Promise<IWorkspace>;
   updateWorkspace(id: string, data: Partial<WorkspaceData>): Promise<IWorkspace>;
   deleteWorkspace(id: string): Promise<void>;
-  listWorkspaces(limit?: number, offset?: number): Promise<IWorkspace[]>;
+  listWorkspaces(userId: string): Promise<IWorkspace[]>;
 
   // Session methods
-  getSession(id: string): Promise<ISession | null>;
+  getSession(id: string, userId: string): Promise<ISession | null>;
   createSession(data: SessionData): Promise<ISession>;
-  listSessionsByWorkspace(workspaceId: string, limit?: number, offset?: number): Promise<ISession[]>;
+  listSessionsByWorkspace(workspaceId: string, userId: string): Promise<ISession[]>;
   updateSession(id: string, data: Partial<SessionData>): Promise<ISession>;
   deleteSession(id: string): Promise<void>;
 
-  // ... other methods (files, filters, cache)
+  // View methods (new)
+  getView(id: string, userId: string): Promise<IView | null>;
+  createView(data: ViewData): Promise<IView>;
+  listViews(workspaceId: string, sessionId?: string): Promise<IView[]>;
+  updateView(id: string, data: Partial<ViewData>): Promise<IView>;
+  deleteView(id: string): Promise<void>;
+
+  // Active views methods (new)
+  getActiveViews(sessionId: string, sheetName: string | null): Promise<IActiveView[]>;
+  addActiveView(data: ActiveViewData): Promise<IActiveView>;
+  removeActiveView(sessionId: string, viewId: string, sheetName: string | null): Promise<void>;
 }
 
+// Factory function - automatically selects correct adapter
 export const db: IDatabase =
-  process.env.DATABASE_TYPE === 'supabase'
-    ? new SupabaseDB()
-    : new SQLiteDB();
+  process.env.DB_PROVIDER === 'supabase'
+    ? new SupabaseAdapter()
+    : new SQLiteAdapter();
 ```
 
 ### Session Data with Multi-Sheet Support

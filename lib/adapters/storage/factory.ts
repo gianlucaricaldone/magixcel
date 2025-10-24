@@ -59,10 +59,10 @@ export function getStorageAdapter(): IStorageAdapter {
  * Get full storage path for a session
  * @param sessionId - Session ID
  * @param filename - Filename (e.g., "original.xlsx" or "data.parquet")
- * @returns Relative storage path
+ * @returns Relative storage path (relative to basePath, not including 'files/')
  */
 export function getSessionFilePath(sessionId: string, filename: string): string {
-  return `files/${sessionId}/${filename}`;
+  return `${sessionId}/${filename}`;
 }
 
 /**

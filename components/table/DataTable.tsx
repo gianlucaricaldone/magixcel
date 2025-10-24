@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useDataStore } from '@/stores/data-store';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
@@ -8,6 +8,47 @@ import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 interface DataTableProps {
   columns: string[];
   data?: any[]; // Optional: if provided, use this instead of store data
+}
+
+/**
+ * Format cell value for display
+ */
+function formatCellValue(value: any): string {
+  if (value === null || value === undefined) return '-';
+
+  // Handle Date objects
+  if (value instanceof Date) {
+    return value.toLocaleDateString('it-IT', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+  }
+
+  // Handle objects (check for nested objects with specific keys)
+  if (typeof value === 'object') {
+    // Try to extract meaningful value from object
+    if ('value' in value) return String(value.value);
+    if ('display' in value) return String(value.display);
+    // If it's a plain object, try JSON stringify
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '[Object]';
+    }
+  }
+
+  // Handle numbers
+  if (typeof value === 'number') {
+    // Check if it looks like a price (has decimals or is large)
+    if (value % 1 !== 0 || value > 100) {
+      return value.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    return value.toLocaleString('it-IT');
+  }
+
+  // Default: convert to string
+  return String(value);
 }
 
 export function DataTable({ columns, data: propData }: DataTableProps) {
@@ -23,6 +64,12 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
 
   const parentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Set mounted flag after first render
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Sync horizontal scroll between header and body
   useEffect(() => {
@@ -39,9 +86,9 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
     return () => bodyEl.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Virtual scrolling setup
+  // Virtual scrolling setup - only after component is mounted
   const rowVirtualizer = useVirtualizer({
-    count: filteredData.length,
+    count: isMounted ? filteredData.length : 0,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 38, // Estimated row height in pixels
     overscan: 10, // Render 10 extra rows above/below viewport for smooth scrolling
@@ -85,8 +132,27 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
+  // Debug logs
+  console.log('[DataTable] Debug:', {
+    isMounted,
+    'filteredData.length': filteredData.length,
+    'virtualItems.length': virtualItems.length,
+    'parentHeight': parentRef.current?.clientHeight,
+  });
+
+  // Debug: Check first row data types
+  if (filteredData.length > 0) {
+    const firstRow = filteredData[0];
+    console.log('[DataTable] First row sample:', {
+      Price: firstRow['Price'],
+      Date: firstRow['Date'],
+      'Price type': typeof firstRow['Price'],
+      'Date type': typeof firstRow['Date'],
+    });
+  }
+
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="flex-1 flex flex-col overflow-hidden">
       {/* Sticky Header */}
       <div
         ref={headerRef}
@@ -114,6 +180,7 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
         className="flex-1 overflow-auto"
         style={{
           contain: 'strict',
+          minHeight: 0, // Allow flex item to shrink below content size
         }}
       >
         <div
@@ -138,17 +205,18 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                {columns.map((col) => (
-                  <div
-                    key={col}
-                    className="flex-1 min-w-[120px] px-3 py-2 text-sm text-slate-600 truncate border-r border-slate-100 last:border-r-0"
-                    title={row[col] !== null && row[col] !== undefined ? String(row[col]) : '-'}
-                  >
-                    {row[col] !== null && row[col] !== undefined
-                      ? String(row[col])
-                      : '-'}
-                  </div>
-                ))}
+                {columns.map((col) => {
+                  const formattedValue = formatCellValue(row[col]);
+                  return (
+                    <div
+                      key={col}
+                      className="flex-1 min-w-[120px] px-3 py-2 text-sm text-slate-600 truncate border-r border-slate-100 last:border-r-0"
+                      title={formattedValue}
+                    >
+                      {formattedValue}
+                    </div>
+                  );
+                })}
               </div>
             );
           })}

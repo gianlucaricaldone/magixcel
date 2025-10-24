@@ -52,7 +52,11 @@
       "Bash(npm install:*)",
       "Bash(tree:*)",
       "Bash(chmod:*)",
-      "Bash(./scripts/migrate-dev-db.sh:*)"
+      "Bash(./scripts/migrate-dev-db.sh:*)",
+      "Bash(node:*)",
+      "Bash(curl:*)",
+      "Bash(awk:*)",
+      "Bash(lsof:*)"
     ],
     "deny": [],
     "ask": []

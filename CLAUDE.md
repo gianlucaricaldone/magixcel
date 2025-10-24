@@ -12,9 +12,13 @@
 - **Frontend**: Next.js 14 (App Router), React, TypeScript, TailwindCSS
 - **UI Components**: shadcn/ui (Radix UI primitives)
 - **State Management**: Zustand
-- **Database**: SQLite (local), Supabase (cloud option)
-- **Charts**: Chart.js, react-chartjs-2
-- **File Processing**: ExcelJS, PapaParse
+- **Database**: SQLite (dev), Supabase PostgreSQL 15+ (prod) - **Adapter Pattern**
+- **Analytics Engine**: **DuckDB 0.9.x** (columnar analytics, sub-100ms queries)
+- **File Format**: **Parquet** (60-70% compression, columnar storage)
+- **Charts**: Recharts 2.x
+- **File Processing**: DuckDB native readers (Excel/CSV → Parquet)
+- **Storage**: Local FS (dev), Cloudflare R2 (prod) - **Adapter Pattern**
+- **Cache**: In-memory (dev), Vercel KV Redis (prod) - **Adapter Pattern**
 
 ---
 
@@ -24,6 +28,7 @@
 ```
 Workspace (isolamento views)
   └── Session (1:1 con file Excel/CSV)
+       ├── Parquet file (DuckDB analytics)
        └── Sheet (foglio Excel, null per CSV)
             └── Active Views (N views attive per sheet)
 ```
@@ -47,7 +52,7 @@ Workspace (isolamento views)
 ## 📚 Essential Documentation
 
 ### Development Standards
-**⭐ [CODING_STANDARDS.md](./CODING_STANDARDS.md)** - **READ THIS FIRST**
+**⭐ [documentation/CODING_STANDARDS.md](./documentation/CODING_STANDARDS.md)** - **READ THIS FIRST**
 
 Contiene linee guida fondamentali su:
 - Naming conventions (camelCase vs snake_case)
@@ -57,10 +62,21 @@ Contiene linee guida fondamentali su:
 - Error handling
 - File organization
 
+**Architecture Documents:**
+- **[documentation/ARCHITECTURE.md](./documentation/ARCHITECTURE.md)** - Adapter Pattern, DuckDB pipeline
+- **[documentation/DATABASE_SCHEMA.md](./documentation/DATABASE_SCHEMA.md)** - Complete Supabase schema
+- **[documentation/API_ENDPOINTS.md](./documentation/API_ENDPOINTS.md)** - All API routes with DuckDB flow
+- **[documentation/DUCKDB_INTEGRATION.md](./documentation/DUCKDB_INTEGRATION.md)** - DuckDB refactoring details
+
 **CRITICAL RULE**:
 - API requests/responses → **camelCase** (`filterConfig`, `isPublic`)
 - Database columns → **snake_case** (`filter_config`, `is_public`)
 - Conversione avviene nell'API layer
+
+**KEY ARCHITECTURE**:
+- **Adapter Pattern**: lib/adapters/ (db, storage, cache) auto-select dev/prod
+- **DuckDB Pipeline**: Upload → Parquet → Query (sub-100ms)
+- **Parquet Format**: 60-70% compression vs JSON, columnar storage
 
 ---
 
@@ -82,10 +98,25 @@ Contiene linee guida fondamentali su:
   /charts/                 # Chart components
 
 /lib/
-  /db/                     # Database abstraction layer
-    sqlite.ts              # SQLite implementation
-    /migrations/           # SQL migration files
+  /adapters/               # Adapter Pattern (dev/prod)
+    /db/                   # Database adapters
+      sqlite.ts            # SQLite (dev)
+      supabase.ts          # Supabase (prod)
+      index.ts             # Auto-select
+    /storage/              # File storage adapters
+      local.ts             # Local FS (dev)
+      r2.ts                # Cloudflare R2 (prod)
+      index.ts             # Auto-select
+    /cache/                # Cache adapters
+      memory.ts            # In-memory (dev)
+      vercel-kv.ts         # Vercel KV (prod)
+      index.ts             # Auto-select
+  /duckdb/                 # DuckDB analytics engine
+    client.ts              # Connection manager
+    query-builder.ts       # FilterConfig → SQL
+    executor.ts            # Query execution
   /processing/             # Business logic
+    parquet-converter.ts   # Excel/CSV → Parquet
     filter-engine.ts       # Filter application logic
 
 /stores/                   # Zustand state management
@@ -117,13 +148,27 @@ CREATE TABLE workspaces (
 CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,
+  user_id UUID NOT NULL,
   name TEXT NOT NULL,
   original_file_name TEXT NOT NULL,
-  original_file_hash TEXT,
   file_type TEXT NOT NULL,
-  active_filters TEXT,  -- JSON: temporary filters (Explorer tab)
-  created_at TEXT DEFAULT (datetime('now')),
-  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
+  file_size BIGINT NOT NULL,
+  file_hash TEXT NOT NULL,
+
+  -- R2 Storage Paths (DuckDB reads from these)
+  r2_path_original TEXT NOT NULL,  -- /files/{sessionId}/original.xlsx
+  r2_path_parquet TEXT NOT NULL,   -- /files/{sessionId}/data.parquet
+
+  -- Metadata (JSONB - sheets, columns, stats)
+  metadata JSONB NOT NULL,
+
+  -- Active Filters (per-sheet, temporary filters from Explorer tab)
+  active_filters JSONB,
+
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
 -- Views (persistent filters)
@@ -131,15 +176,18 @@ CREATE TABLE views (
   id TEXT PRIMARY KEY,
   workspace_id TEXT NOT NULL,  -- Views are global to workspace
   session_id TEXT NOT NULL,
+  user_id UUID NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
   category TEXT DEFAULT 'Custom',
-  filter_config TEXT NOT NULL,  -- JSON: persistent filter configuration
-  is_public BOOLEAN DEFAULT 0,
-  created_at TEXT DEFAULT (datetime('now')),
-  updated_at TEXT DEFAULT (datetime('now')),
+  filter_config JSONB NOT NULL,  -- Persistent filter configuration
+  is_public BOOLEAN DEFAULT false,
+  public_link_id TEXT UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
-  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+  FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
 );
 
 -- Active Views (which views are active on which sheets)
@@ -221,6 +269,39 @@ Body: {
 // Deactivate view
 DELETE /api/active-views?sessionId=xxx&sheetName=xxx&viewId=xxx
 ```
+
+### 4. DuckDB Query Flow (Filtering)
+
+```typescript
+// User applies filter in FilterBuilder UI
+User modifies filter
+  ↓
+FilterConfig → SQL query (via lib/duckdb/query-builder.ts)
+  ↓
+Check CacheAdapter: hash(sessionId + filterConfig)
+  ↓ HIT: Return cached results (<10ms)
+  ↓ MISS: Execute DuckDB query
+  ↓
+Get session.r2_path_parquet from DBAdapter
+  ↓
+DuckDB queries Parquet file:
+  SELECT * FROM read_parquet('https://r2.../data.parquet')
+  WHERE sheet_name = 'Q1_Sales'
+    AND amount > 1000
+    AND region IN ('EU', 'US')
+  LIMIT 100 OFFSET 0;
+  ↓
+DuckDB returns filtered rows (50-200ms)
+  ↓
+Cache result (CacheAdapter, 1h TTL)
+  ↓
+Return to frontend
+```
+
+**Performance:**
+- **Cached**: <10ms
+- **Uncached**: 50-200ms (even on 1M rows)
+- **Parquet benefits**: 60-70% compression, columnar reads, predicate pushdown
 
 ---
 

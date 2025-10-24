@@ -383,7 +383,57 @@ export class SQLiteAdapter implements IDBAdapter {
   }
 
   async listViews(userId: string, workspaceId?: string, sessionId?: string, category?: string): Promise<IView[]> {
-    throw new Error('Views not yet implemented in SQLite adapter');
+    let query = `
+      SELECT
+        id, workspace_id, session_id, user_id, name, description, category,
+        filter_config, view_type, snapshot_data, is_public, public_link_id,
+        is_default, dashboard_layout, created_at, updated_at, last_accessed_at, access_count
+      FROM views
+      WHERE user_id = ?
+    `;
+
+    const params: any[] = [userId];
+
+    if (workspaceId) {
+      query += ' AND workspace_id = ?';
+      params.push(workspaceId);
+    }
+
+    if (sessionId) {
+      query += ' AND session_id = ?';
+      params.push(sessionId);
+    }
+
+    if (category) {
+      query += ' AND category = ?';
+      params.push(category);
+    }
+
+    query += ' ORDER BY updated_at DESC';
+
+    const stmt = this.db.prepare(query);
+    const rows = stmt.all(...params) as any[];
+
+    return rows.map((row) => ({
+      id: row.id,
+      workspace_id: row.workspace_id,
+      session_id: row.session_id,
+      user_id: row.user_id,
+      name: row.name,
+      description: row.description || undefined,
+      category: row.category,
+      filter_config: row.filter_config ? JSON.parse(row.filter_config) : {},
+      view_type: row.view_type,
+      snapshot_data: row.snapshot_data ? JSON.parse(row.snapshot_data) : undefined,
+      is_public: Boolean(row.is_public),
+      public_link_id: row.public_link_id || undefined,
+      is_default: Boolean(row.is_default),
+      dashboard_layout: row.dashboard_layout ? JSON.parse(row.dashboard_layout) : undefined,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      last_accessed_at: row.last_accessed_at || undefined,
+      access_count: row.access_count,
+    }));
   }
 
   async createView(userId: string, data: Omit<IView, 'id' | 'user_id' | 'access_count' | 'created_at' | 'updated_at' | 'last_accessed_at'>): Promise<IView> {

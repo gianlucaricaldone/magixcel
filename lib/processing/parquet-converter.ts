@@ -8,6 +8,7 @@
 import { DuckDBClient, createDuckDBClient } from '../duckdb/client';
 import { ISessionMetadata, ISheetMetadata, IColumnMetadata } from '../adapters/db/interface';
 import fs from 'fs';
+import path from 'path';
 import { createHash } from 'crypto';
 
 export interface IConversionResult {
@@ -41,25 +42,35 @@ export class ParquetConverter {
     console.log(`[ParquetConverter] Starting conversion: ${options.inputPath}`);
 
     // Ensure DuckDB is connected
+    console.log(`[ParquetConverter] Step 1: Connecting to DuckDB...`);
     await this.client.connect();
+    console.log(`[ParquetConverter] Step 1: DuckDB connected`);
 
     try {
       // Get file hash
+      console.log(`[ParquetConverter] Step 2: Calculating file hash...`);
       const fileHash = await this.calculateFileHash(options.inputPath);
+      console.log(`[ParquetConverter] Step 2: File hash calculated: ${fileHash.substring(0, 8)}...`);
 
       // Load file into DuckDB based on type
+      console.log(`[ParquetConverter] Step 3: Loading ${options.fileType} file...`);
       let tableName: string;
       if (options.fileType === 'csv') {
         tableName = await this.loadCSVFile(options.inputPath);
       } else {
         tableName = await this.loadExcelFile(options.inputPath);
       }
+      console.log(`[ParquetConverter] Step 3: File loaded into table: ${tableName}`);
 
       // Extract metadata
+      console.log(`[ParquetConverter] Step 4: Extracting metadata...`);
       const metadata = await this.extractMetadata(tableName, options.fileType);
+      console.log(`[ParquetConverter] Step 4: Metadata extracted (${metadata.totalRows} rows)`);
 
       // Export to Parquet
+      console.log(`[ParquetConverter] Step 5: Exporting to Parquet...`);
       await this.exportToParquet(tableName, options.outputPath, metadata);
+      console.log(`[ParquetConverter] Step 5: Parquet export complete`);
 
       // Calculate compression ratio
       const originalSize = fs.statSync(options.inputPath).size;
@@ -106,90 +117,92 @@ export class ParquetConverter {
 
   /**
    * Load Excel file into DuckDB
-   * Note: For Excel, we need to handle multiple sheets
+   * Uses temporary CSV files for efficient loading
    */
   private async loadExcelFile(filePath: string): Promise<string> {
     console.log(`[ParquetConverter] Loading Excel: ${filePath}`);
 
-    // For now, use ExcelJS to read Excel and convert to CSV, then load with DuckDB
-    // Full DuckDB Excel support requires spatial extension (st_read)
-    // Alternative: Read with ExcelJS, write temp CSV, load into DuckDB
-
-    // TODO: Implement proper multi-sheet Excel loading
-    // For MVP, we can use a simpler approach with ExcelJS
-
     const ExcelJS = require('exceljs');
+    const Papa = require('papaparse');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(filePath);
 
-    // Create a table that includes all sheets with a 'sheet' column
     const combinedTableName = 'excel_all_sheets';
-
-    // First sheet to initialize table
+    const tempDir = path.dirname(filePath);
     let firstSheet = true;
 
     for (const worksheet of workbook.worksheets) {
       const sheetName = worksheet.name;
-      const rows: any[] = [];
+
+      console.log(`[ParquetConverter] Processing sheet: ${sheetName} (${worksheet.rowCount} rows)`);
 
       // Get headers from first row
       const headerRow = worksheet.getRow(1);
       const headers = headerRow.values as any[];
-      const cleanHeaders = headers.slice(1); // Remove first empty element
+      const cleanHeaders = ['sheet', ...headers.slice(1)]; // Add 'sheet' column
 
-      // Get data rows
+      // Extract all data rows
+      const rows: any[][] = [];
       worksheet.eachRow((row, rowNumber) => {
         if (rowNumber === 1) return; // Skip header
 
         const values = row.values as any[];
-        const cleanValues = values.slice(1); // Remove first empty element
+        const cleanValues = values.slice(1);
 
-        const rowData: any = { sheet: sheetName };
-        cleanHeaders.forEach((header, index) => {
-          rowData[header] = cleanValues[index];
-        });
-
-        rows.push(rowData);
+        // Add sheet name as first column
+        rows.push([sheetName, ...cleanValues]);
       });
 
-      // Insert into DuckDB
-      if (rows.length > 0) {
-        // Create INSERT statement
-        const columns = Object.keys(rows[0]);
-        const columnsList = columns.map(c => `"${c}"`).join(', ');
+      if (rows.length === 0) {
+        console.log(`[ParquetConverter] Sheet ${sheetName} is empty, skipping`);
+        continue;
+      }
 
+      // Write to temporary CSV file
+      const tempCsvPath = path.join(tempDir, `sheet-${Date.now()}-${sheetName.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
+      const csvContent = Papa.unparse({
+        fields: cleanHeaders,
+        data: rows,
+      });
+
+      fs.writeFileSync(tempCsvPath, csvContent);
+      console.log(`[ParquetConverter] Temp CSV created: ${tempCsvPath}`);
+
+      try {
+        // Load CSV into DuckDB
         if (firstSheet) {
-          // Create table with first sheet
-          const createSQL = `CREATE TABLE ${combinedTableName} AS SELECT * FROM (VALUES ${this.rowsToValues(rows, columns)}) AS t(${columnsList})`;
+          // Create table from first sheet's CSV
+          const createSQL = `
+            CREATE TABLE ${combinedTableName} AS
+            SELECT * FROM read_csv_auto('${tempCsvPath}', header=true, auto_detect=true)
+          `;
           await this.client.query(createSQL);
+          console.log(`[ParquetConverter] Created table from sheet: ${sheetName}`);
           firstSheet = false;
         } else {
           // Insert additional sheets
-          const insertSQL = `INSERT INTO ${combinedTableName} SELECT * FROM (VALUES ${this.rowsToValues(rows, columns)}) AS t(${columnsList})`;
+          const insertSQL = `
+            INSERT INTO ${combinedTableName}
+            SELECT * FROM read_csv_auto('${tempCsvPath}', header=true, auto_detect=true)
+          `;
           await this.client.query(insertSQL);
+          console.log(`[ParquetConverter] Inserted data from sheet: ${sheetName}`);
+        }
+      } finally {
+        // Cleanup temp CSV
+        if (fs.existsSync(tempCsvPath)) {
+          fs.unlinkSync(tempCsvPath);
         }
       }
+    }
+
+    if (firstSheet) {
+      throw new Error('Excel file contains no data');
     }
 
     return combinedTableName;
   }
 
-  /**
-   * Convert rows array to SQL VALUES format
-   */
-  private rowsToValues(rows: any[], columns: string[]): string {
-    return rows.map(row => {
-      const values = columns.map(col => {
-        const val = row[col];
-        if (val === null || val === undefined) return 'NULL';
-        if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
-        if (typeof val === 'number') return String(val);
-        if (typeof val === 'boolean') return val ? 'true' : 'false';
-        return `'${String(val).replace(/'/g, "''")}'`;
-      });
-      return `(${values.join(', ')})`;
-    }).join(', ');
-  }
 
   /**
    * Extract metadata from loaded table
@@ -237,7 +250,8 @@ export class ParquetConverter {
       const rowCountQuery = await this.client.query(
         `SELECT COUNT(*) as count FROM ${tableName} WHERE sheet = '${sheetName}'`
       );
-      const rowCount = rowCountQuery.rows[0].count;
+      // Convert BigInt to Number
+      const rowCount = Number(rowCountQuery.rows[0].count);
 
       // Get columns (excluding 'sheet' column)
       const columns: IColumnMetadata[] = schema

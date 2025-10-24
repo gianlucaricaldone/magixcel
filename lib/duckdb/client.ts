@@ -46,25 +46,38 @@ export class DuckDBClient {
     }
 
     return new Promise((resolve, reject) => {
+      console.log('[DuckDB] Creating in-memory database...');
+
       // Create in-memory database (faster for queries)
       this.db = new duckdb.Database(':memory:', (err) => {
         if (err) {
+          console.error('[DuckDB] Database creation failed:', err);
           reject(new Error(`Failed to create DuckDB database: ${err.message}`));
           return;
         }
 
-        // Create connection
-        this.connection = this.db!.connect((err) => {
-          if (err) {
-            reject(new Error(`Failed to connect to DuckDB: ${err.message}`));
-            return;
-          }
+        console.log('[DuckDB] Database created successfully, getting connection...');
+
+        try {
+          // Create connection - connect() returns the connection directly (synchronous)
+          this.connection = this.db!.connect();
+          console.log('[DuckDB] Connection obtained, type:', typeof this.connection);
 
           // Set configuration
+          console.log('[DuckDB] Starting configuration...');
           this.configureConnection()
-            .then(() => resolve())
-            .catch(reject);
-        });
+            .then(() => {
+              console.log('[DuckDB] Configuration promise resolved');
+              resolve();
+            })
+            .catch((err) => {
+              console.error('[DuckDB] Configuration failed:', err);
+              reject(err);
+            });
+        } catch (err: any) {
+          console.error('[DuckDB] Connection failed:', err);
+          reject(new Error(`Failed to connect to DuckDB: ${err.message}`));
+        }
       });
     });
   }
@@ -77,18 +90,39 @@ export class DuckDBClient {
       throw new Error('Connection not initialized');
     }
 
-    const run = promisify(this.connection.run.bind(this.connection));
+    console.log('[DuckDB] Configuring connection...');
 
-    // Set number of threads
-    await run(`SET threads TO ${this.config.threads};`);
+    try {
+      // Execute configuration queries directly without promisify
+      await new Promise<void>((resolve, reject) => {
+        this.connection!.exec(`SET threads TO ${this.config.threads};`, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      console.log('[DuckDB] Threads configured');
 
-    // Set memory limit
-    await run(`SET memory_limit = '${this.config.memoryLimit}';`);
+      await new Promise<void>((resolve, reject) => {
+        this.connection!.exec(`SET memory_limit = '${this.config.memoryLimit}';`, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      console.log('[DuckDB] Memory limit configured');
 
-    // Enable progress bar (useful for large queries)
-    await run(`SET enable_progress_bar = false;`);
+      await new Promise<void>((resolve, reject) => {
+        this.connection!.exec(`SET enable_progress_bar = false;`, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      console.log('[DuckDB] Progress bar configured');
 
-    console.log('[DuckDB] Connection configured successfully');
+      console.log('[DuckDB] Connection configured successfully');
+    } catch (error) {
+      console.error('[DuckDB] Configuration error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -271,7 +305,9 @@ export class DuckDBClient {
   async getRowCount(tableName: string): Promise<number> {
     const sql = `SELECT COUNT(*) as count FROM ${tableName};`;
     const result = await this.query(sql);
-    return result.rows[0]?.count || 0;
+    // Convert BigInt to Number
+    const count = result.rows[0]?.count;
+    return count ? Number(count) : 0;
   }
 
   /**

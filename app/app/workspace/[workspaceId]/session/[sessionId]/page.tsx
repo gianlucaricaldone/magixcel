@@ -13,6 +13,7 @@ import { ViewSheetTabs } from '@/components/workspace/ViewSheetTabs';
 import { ViewSplitLayout } from '@/components/workspace/ViewSplitLayout';
 import { ViewPickerDialog } from '@/components/workspace/ViewPickerDialog';
 import { FilterBuilder } from '@/components/filters/FilterBuilder';
+import { DataTable } from '@/components/table/DataTable';
 import {
   Dialog,
   DialogContent,
@@ -67,17 +68,19 @@ export default function SessionPage() {
         // Load workspace
         const workspaceResponse = await fetch(`/api/workspace/${workspaceId}`);
         const workspaceResult = await workspaceResponse.json();
-        if (workspaceResult.success) {
-          setWorkspaceName(workspaceResult.workspace.name);
+        if (workspaceResult.success && workspaceResult.data) {
+          setWorkspaceName(workspaceResult.data.name);
         }
 
         // Load session
         const sessionResponse = await fetch(`/api/session/${sessionId}`);
         const sessionResult = await sessionResponse.json();
 
-        if (sessionResult.success) {
-          setSession(sessionResult.session);
-          setSessionName(sessionResult.session.name);
+        if (sessionResult.success && sessionResult.data) {
+          const session = sessionResult.data;
+          // setSession expects (sessionId, metadata) not the whole session object
+          setSession(session.id, session.metadata);
+          setSessionName(session.name);
 
           // Load data.json
           const dataResponse = await fetch(`/api/session/${sessionId}/data`);
@@ -87,18 +90,18 @@ export default function SessionPage() {
             setData(dataResult.data);
 
             // Handle sheets (Excel files)
-            if (sessionResult.session.file_type === 'xlsx' || sessionResult.session.file_type === 'xls') {
+            if (session.file_type === 'xlsx' || session.file_type === 'xls') {
               try {
                 const sheetsResponse = await fetch(`/api/session/${sessionId}/sheets`);
                 const sheetsResult = await sheetsResponse.json();
 
                 if (sheetsResult.success && sheetsResult.sheets && sheetsResult.sheets.length > 0) {
                   setSheets(sheetsResult.sheets);
-                  const firstSheet = sheetsResult.sheets[0].name;
-                  setDataActiveSheet(firstSheet);
+                  const firstSheetName = sheetsResult.sheets[0].sheetName;
+                  setDataActiveSheet(firstSheetName);
                 }
               } catch (error) {
-                console.warn('No sheets.json found, treating as single sheet');
+                console.warn('Error loading sheets:', error);
               }
             }
           }
@@ -128,9 +131,11 @@ export default function SessionPage() {
     const restoreViewsFromDB = async () => {
       if (views.length > 0 && openViews.length === 0) {
         try {
+          // TODO: Migrate to active_views table
           // Fetch views state from database
-          const response = await fetch(`/api/session/${sessionId}/views-state`);
-          const result = await response.json();
+          // const response = await fetch(`/api/session/${sessionId}/views-state`);
+          // const result = await response.json();
+          const result = { success: false }; // Temporary: views-state endpoint removed
 
           if (result.success && result.viewsState) {
             const { openViewIds, activeViewId: savedActiveViewId } = result.viewsState;
@@ -176,6 +181,8 @@ export default function SessionPage() {
       if (openViews.length > 0) {
         const viewIds = openViews.map((v) => v.id);
         try {
+          // TODO: Migrate to active_views table
+          /*
           await fetch(`/api/session/${sessionId}/views-state`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -184,12 +191,15 @@ export default function SessionPage() {
               activeViewId: activeViewId,
             }),
           });
+          */
         } catch (error) {
           console.error('Error saving views state to database:', error);
         }
       } else {
         // Clear state when no views are open
         try {
+          // TODO: Migrate to active_views table
+          /*
           await fetch(`/api/session/${sessionId}/views-state`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
@@ -198,6 +208,7 @@ export default function SessionPage() {
               activeViewId: null,
             }),
           });
+          */
         } catch (error) {
           console.error('Error clearing views state in database:', error);
         }
@@ -338,22 +349,22 @@ export default function SessionPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {activeView ? (
-          <ViewSplitLayout
-            view={activeView}
-            data={filteredData}
-            columns={columns}
-          />
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <p className="text-slate-600 mb-4">No view selected</p>
-              <Button onClick={() => setIsViewPickerOpen(true)}>
-                Select a View
-              </Button>
-            </div>
-          </div>
-        )}
+        {(() => {
+          console.log('[SessionPage] Rendering DataTable with:', {
+            'data.length': data.length,
+            'columns.length': columns.length,
+            activeView: activeView ? 'exists' : 'null'
+          });
+          return activeView ? (
+            <ViewSplitLayout
+              view={activeView}
+              data={filteredData}
+              columns={columns}
+            />
+          ) : (
+            <DataTable columns={columns} />
+          );
+        })()}
       </div>
 
       {/* View Sheet Tabs */}

@@ -29,11 +29,9 @@ export async function PUT(
     // Get filter state from request body
     const { filtersBySheet } = await request.json();
 
-    // Save filters as JSON string
-    const filtersJson = JSON.stringify(filtersBySheet);
-
+    // Save filters (adapter will serialize to JSON)
     await db.updateSession(sessionId, userId, {
-      active_filters: filtersJson,
+      active_filters: filtersBySheet,
     });
 
     return NextResponse.json({

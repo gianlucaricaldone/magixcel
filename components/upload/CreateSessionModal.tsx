@@ -130,10 +130,17 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
 
       const result = await response.json();
 
-      if (result.success && result.sessionId && result.metadata) {
-        setSession(result.sessionId, result.metadata);
+      if (result.success && result.data && result.data.sessionId) {
+        const sessionId = result.data.sessionId;
+        const metadata = {
+          sheets: result.data.sheets || [],
+          totalRows: result.data.totalRows || 0,
+          totalColumns: result.data.totalColumns || 0,
+        };
 
-        const dataResponse = await fetch(`/api/session/${result.sessionId}/data`);
+        setSession(sessionId, metadata);
+
+        const dataResponse = await fetch(`/api/session/${sessionId}/data`);
         const dataResult = await dataResponse.json();
 
         if (dataResult.success && dataResult.data) {
@@ -142,7 +149,7 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
 
         setUploadProgress(100);
         handleClose();
-        router.push(`/app/workspace/${workspaceId}/session/${result.sessionId}`);
+        router.push(`/app/workspace/${workspaceId}/session/${sessionId}`);
       } else {
         throw new Error('Upload failed');
       }
@@ -180,10 +187,17 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
 
       const result = await response.json();
 
-      if (result.success && result.sessionId && result.metadata) {
-        setSession(result.sessionId, result.metadata);
+      if (result.success && result.data && result.data.sessionId) {
+        const sessionId = result.data.sessionId;
+        const metadata = {
+          sheets: result.data.sheets || [],
+          totalRows: result.data.totalRows || 0,
+          totalColumns: result.data.totalColumns || 0,
+        };
 
-        const dataResponse = await fetch(`/api/session/${result.sessionId}/data`);
+        setSession(sessionId, metadata);
+
+        const dataResponse = await fetch(`/api/session/${sessionId}/data`);
         const dataResult = await dataResponse.json();
 
         if (dataResult.success && dataResult.data) {
@@ -191,7 +205,7 @@ export function CreateSessionModal({ open, onOpenChange, workspaceId }: CreateSe
         }
 
         handleClose();
-        router.push(`/app/workspace/${workspaceId}/session/${result.sessionId}`);
+        router.push(`/app/workspace/${workspaceId}/session/${sessionId}`);
       } else {
         throw new Error('Failed to create session');
       }
