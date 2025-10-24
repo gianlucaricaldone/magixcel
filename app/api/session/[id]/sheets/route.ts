@@ -1,7 +1,11 @@
+/**
+ * Session Sheets API Route (Refactored)
+ *
+ * Returns sheet metadata for Excel files from session.metadata
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import path from 'path';
-import fs from 'fs/promises';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 export async function GET(
@@ -9,10 +13,12 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const { id: sessionId } = params;
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
+    const sessionId = params.id;
 
     // Get session metadata
-    const session = await db.getSession(sessionId);
+    const session = await db.getSession(sessionId, userId);
     if (!session) {
       return NextResponse.json(
         {
@@ -40,39 +46,15 @@ export async function GET(
       );
     }
 
-    // Read sheets.json
-    const sheetsPath = path.join(process.cwd(), 'data', 'uploads', sessionId, 'sheets.json');
+    // Get sheets metadata from session.metadata
+    const sheets = session.metadata?.sheets || [];
 
-    try {
-      const sheetsData = await fs.readFile(sheetsPath, 'utf-8');
-      const sheets = JSON.parse(sheetsData);
+    // Return sheet metadata (already in correct format)
+    return NextResponse.json({
+      success: true,
+      sheets,
+    });
 
-      // Extract sheet metadata (without full data)
-      const sheetMetadata = sheets.map((sheet: any) => ({
-        name: sheet.sheetName,
-        rowCount: sheet.rowCount,
-        columnCount: sheet.columnCount,
-        columns: sheet.columns,
-      }));
-
-      return NextResponse.json({
-        success: true,
-        sheets: sheetMetadata,
-      });
-    } catch (fileError) {
-      console.error('Error reading sheets.json:', fileError);
-
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: ERROR_CODES.NOT_FOUND,
-            message: 'sheets.json not found for this session',
-          },
-        },
-        { status: 404 }
-      );
-    }
   } catch (error) {
     console.error('Error in GET /api/session/[id]/sheets:', error);
 

@@ -145,11 +145,11 @@ export function SessionList({ workspaceId }: SessionListProps) {
                   <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Database className="h-4 w-4" />
-                      {formatNumber(session.row_count)} rows
+                      {formatNumber(session.metadata?.totalRows || 0)} rows
                     </div>
                     <div className="flex items-center gap-1">
                       <FileSpreadsheet className="h-4 w-4" />
-                      {session.column_count} columns
+                      {session.metadata?.totalColumns || 0} columns
                     </div>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />

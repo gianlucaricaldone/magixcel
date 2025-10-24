@@ -1,5 +1,13 @@
+/**
+ * Workspace Detail API Routes (Refactored)
+ *
+ * GET    /api/workspace/[id] - Get workspace by ID
+ * PUT    /api/workspace/[id] - Update workspace
+ * DELETE /api/workspace/[id] - Delete workspace
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 import { IWorkspace } from '@/types/database';
 
@@ -12,9 +20,11 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const workspaceId = params.id;
 
-    const workspace = await db.getWorkspace(workspaceId);
+    const workspace = await db.getWorkspace(workspaceId, userId);
 
     if (!workspace) {
       return NextResponse.json(
@@ -31,10 +41,10 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      workspace,
+      data: workspace,
     });
   } catch (error: unknown) {
-    console.error('Get workspace error:', error);
+    console.error('[Workspace GET] Error:', error);
     return NextResponse.json(
       {
         success: false,
@@ -57,12 +67,15 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const workspaceId = params.id;
+
     const body = await request.json();
     const { name, description, color, icon } = body;
 
     // Validate workspace exists
-    const existingWorkspace = await db.getWorkspace(workspaceId);
+    const existingWorkspace = await db.getWorkspace(workspaceId, userId);
     if (!existingWorkspace) {
       return NextResponse.json(
         {
@@ -90,21 +103,21 @@ export async function PUT(
       );
     }
 
-    // Update workspace
-    const updates: Partial<IWorkspace> = {};
+    // Build updates
+    const updates: Partial<Omit<IWorkspace, 'id' | 'user_id' | 'created_at'>> = {};
     if (name !== undefined) updates.name = name.trim();
-    if (description !== undefined) updates.description = description?.trim() || null;
+    if (description !== undefined) updates.description = description?.trim() || undefined;
     if (color !== undefined) updates.color = color;
     if (icon !== undefined) updates.icon = icon;
 
-    const workspace = await db.updateWorkspace(workspaceId, updates);
+    const workspace = await db.updateWorkspace(workspaceId, userId, updates);
 
     return NextResponse.json({
       success: true,
-      workspace,
+      data: workspace,
     });
   } catch (error: unknown) {
-    console.error('Update workspace error:', error);
+    console.error('[Workspace PUT] Error:', error);
     return NextResponse.json(
       {
         success: false,
@@ -127,24 +140,12 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const workspaceId = params.id;
 
-    // Prevent deletion of default workspace
-    if (workspaceId === 'default') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: 'Cannot delete default workspace',
-          },
-        },
-        { status: 400 }
-      );
-    }
-
     // Validate workspace exists
-    const workspace = await db.getWorkspace(workspaceId);
+    const workspace = await db.getWorkspace(workspaceId, userId);
     if (!workspace) {
       return NextResponse.json(
         {
@@ -158,15 +159,29 @@ export async function DELETE(
       );
     }
 
+    // Prevent deletion of default workspace
+    if (workspace.is_default) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Cannot delete default workspace',
+          },
+        },
+        { status: 400 }
+      );
+    }
+
     // Delete workspace (cascade will delete associated sessions)
-    await db.deleteWorkspace(workspaceId);
+    await db.deleteWorkspace(workspaceId, userId);
 
     return NextResponse.json({
       success: true,
       message: 'Workspace deleted successfully',
     });
   } catch (error: unknown) {
-    console.error('Delete workspace error:', error);
+    console.error('[Workspace DELETE] Error:', error);
     return NextResponse.json(
       {
         success: false,

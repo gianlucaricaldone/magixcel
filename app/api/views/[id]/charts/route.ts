@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
@@ -11,8 +11,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     // Check if view exists
-    const view = await db.getView(params.id);
+    const view = await db.getView(params.id, userId);
     if (!view) {
       return NextResponse.json(
         {
@@ -57,6 +59,8 @@ export async function POST(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const body = await request.json();
     const { title, chartType, config, size, position } = body;
 
@@ -75,7 +79,7 @@ export async function POST(
     }
 
     // Check if view exists
-    const view = await db.getView(params.id);
+    const view = await db.getView(params.id, userId);
     if (!view) {
       return NextResponse.json(
         {
@@ -89,33 +93,34 @@ export async function POST(
       );
     }
 
-    // Validate config is valid JSON
-    let configString: string;
-    try {
-      configString = typeof config === 'string' ? config : JSON.stringify(config);
-      JSON.parse(configString); // Validate it's valid JSON
-    } catch (e) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: 'Invalid chart configuration JSON',
+    // Validate config is valid JSON if it's a string
+    if (typeof config === 'string') {
+      try {
+        JSON.parse(config);
+      } catch (e) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              code: ERROR_CODES.VALIDATION_ERROR,
+              message: 'Invalid chart configuration JSON',
+            },
           },
-        },
-        { status: 400 }
-      );
+          { status: 400 }
+        );
+      }
     }
 
     // Get current chart count for position
-    const currentPosition = position !== undefined ? position : view.chart_count;
+    const chartCount = await db.countViewCharts(params.id);
+    const currentPosition = position !== undefined ? position : chartCount;
 
     // Create chart - convert camelCase to snake_case for DB
     const chart = await db.createViewChart({
       view_id: params.id,
       chart_type: chartType, // Convert camelCase → snake_case
       title,
-      config: configString,
+      config,
       size: size || 'medium',
       position: currentPosition,
     });

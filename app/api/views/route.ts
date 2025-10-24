@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { IFilterConfig, ViewType } from '@/types';
 import { nanoid } from 'nanoid';
 import { ERROR_CODES } from '@/lib/utils/constants';
@@ -10,17 +10,14 @@ import { ERROR_CODES } from '@/lib/utils/constants';
  */
 export async function GET(request: NextRequest) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const { searchParams } = new URL(request.url);
     const category = searchParams.get('category') || undefined;
     const sessionId = searchParams.get('sessionId') || undefined;
     const workspaceId = searchParams.get('workspaceId') || undefined;
 
-    let views = await db.listViews(sessionId, category);
-
-    // Filter by workspace if provided (views are GLOBAL to workspace)
-    if (workspaceId) {
-      views = views.filter((view) => view.workspace_id === workspaceId);
-    }
+    const views = await db.listViews(userId, workspaceId, sessionId, category);
 
     return NextResponse.json({
       success: true,
@@ -47,6 +44,8 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const body = await request.json();
     const {
       name,
@@ -116,9 +115,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check if name already exists
-    const existing = await db.getViewByName(name);
-    if (existing) {
+    // Check if name already exists in this workspace
+    const existingViews = await db.listViews(userId, workspaceId, undefined, undefined);
+    const nameConflict = existingViews.find((v) => v.name === name);
+    if (nameConflict) {
       return NextResponse.json(
         { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'A view with this name already exists' } },
         { status: 409 }
@@ -129,15 +129,15 @@ export async function POST(request: NextRequest) {
     const publicLinkId = isPublic ? nanoid(10) : undefined;
 
     // Create view (GLOBAL to workspace, not tied to a specific sheet)
-    const view = await db.createView({
+    const view = await db.createView(userId, {
       name,
       description: description || '',
       category: category || 'Custom',
       workspace_id: workspaceId,
       session_id: sessionId, // REQUIRED: Every view must be linked to a session
-      filter_config: JSON.stringify(filterConfig),
+      filter_config: filterConfig,
       view_type: viewType as ViewType,
-      snapshot_data: snapshotData ? JSON.stringify(snapshotData) : undefined,
+      snapshot_data: snapshotData || undefined,
       is_public: isPublic,
       public_link_id: publicLinkId,
     });

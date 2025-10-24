@@ -1,154 +1,44 @@
+/**
+ * File Upload API Route (Refactored)
+ *
+ * Handles file uploads with new architecture:
+ * - Converts Excel/CSV to Parquet using DuckDB
+ * - Stores original + Parquet using Storage Adapter
+ * - Saves metadata using DB Adapter
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { storage } from '@/lib/storage';
-import { processExcelFile } from '@/lib/processing/excel-processor';
-import { processCSVFile } from '@/lib/processing/csv-processor';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
+import { getStorageAdapter, getSessionFilePath } from '@/lib/adapters/storage/factory';
+import { createParquetConverter } from '@/lib/processing/parquet-converter';
 import { ERROR_CODES, MAX_FILE_SIZE } from '@/lib/utils/constants';
 import { sanitizeFilename } from '@/lib/utils/validators';
-import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
 export async function POST(request: NextRequest) {
+  let tempFilePath: string | null = null;
+  let tempParquetPath: string | null = null;
+
   try {
-    // Check if this is a JSON request (from existing session) or form data (file upload)
-    const contentType = request.headers.get('content-type') || '';
+    const db = getDBAdapter();
+    const storage = getStorageAdapter();
+    const userId = getCurrentUserId();
 
-    if (contentType.includes('application/json')) {
-      // Handle creation from existing file
-      const body = await request.json();
-      const { fromFileHash, workspaceId = 'default', sessionName } = body;
-
-      if (!fromFileHash) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: ERROR_CODES.VALIDATION_ERROR,
-              message: 'fromFileHash is required',
-            },
-          },
-          { status: 400 }
-        );
-      }
-
-      // Find any session that uses this file (we'll use it as reference)
-      const allSessions = await db.listSessions(1000, 0);
-      const referenceSession = allSessions.find(s => s.original_file_hash === fromFileHash);
-
-      if (!referenceSession) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: ERROR_CODES.SESSION_NOT_FOUND,
-              message: 'No session found with this file',
-            },
-          },
-          { status: 404 }
-        );
-      }
-
-      // Determine session name (use file name as default, not reference session name)
-      const newSessionName = sessionName && sessionName.trim()
-        ? sessionName.trim()
-        : referenceSession.original_file_name.replace(/\.[^/.]+$/, ''); // Remove extension
-
-      // Create new session sharing the same file
-      const newSession = await db.createSession({
-        workspace_id: workspaceId,
-        name: newSessionName,
-        original_file_name: referenceSession.original_file_name,
-        original_file_hash: referenceSession.original_file_hash,
-        row_count: referenceSession.row_count,
-        column_count: referenceSession.column_count,
-        file_size: referenceSession.file_size,
-        file_type: referenceSession.file_type,
-      });
-
-      // Create default "All Data" view for the new session
-      await db.createView({
-        workspace_id: workspaceId,
-        session_id: newSession.id,
-        name: 'All Data',
-        description: 'View all data without any filters',
-        filter_config: JSON.stringify({ filters: [], combinator: 'AND' }),
-        category: 'System',
-        is_default: 1,
-      });
-
-      // Get the file record from reference session
-      const existingFile = await db.getFileBySession(referenceSession.id);
-      if (existingFile) {
-        // Create file record pointing to the same storage path
-        await db.createFile({
-          session_id: newSession.id,
-          file_type: existingFile.file_type,
-          storage_type: existingFile.storage_type,
-          storage_path: existingFile.storage_path,
-        });
-      }
-
-      // Copy data.json and sheets.json to new session directory
-      try {
-        // Get data.json from reference session
-        const dataJsonPath = `${referenceSession.id}/data.json`;
-        const dataJson = await storage.get(dataJsonPath);
-        await storage.save(newSession.id, 'data.json', dataJson);
-
-        // Try to copy sheets.json if it exists
-        try {
-          const sheetsJsonPath = `${referenceSession.id}/sheets.json`;
-          const sheetsJson = await storage.get(sheetsJsonPath);
-          await storage.save(newSession.id, 'sheets.json', sheetsJson);
-        } catch (error) {
-          // sheets.json might not exist for CSV files, that's ok
-        }
-      } catch (error) {
-        console.error('Error copying data files:', error);
-        return NextResponse.json(
-          {
-            success: false,
-            error: {
-              code: ERROR_CODES.PROCESSING_ERROR,
-              message: 'Failed to copy session data',
-            },
-          },
-          { status: 500 }
-        );
-      }
-
-      // Load metadata from data.json
-      const dataJsonPath = `${newSession.id}/data.json`;
-      const dataJsonBuffer = await storage.get(dataJsonPath);
-      const data = JSON.parse(dataJsonBuffer.toString());
-      const metadata = {
-        fileName: referenceSession.original_file_name,
-        fileSize: referenceSession.file_size,
-        fileType: referenceSession.file_type,
-        rowCount: referenceSession.row_count,
-        columnCount: referenceSession.column_count,
-        columns: data.length > 0 ? Object.keys(data[0]) : [],
-        preview: data.slice(0, 10),
-      };
-
-      return NextResponse.json({
-        success: true,
-        sessionId: newSession.id,
-        metadata,
-      });
-    }
-
-    // Original file upload logic
+    // Parse form data
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const sessionName = formData.get('sessionName') as string;
-    const workspaceId = (formData.get('workspaceId') as string) || 'default'; // Use default workspace if not specified
+    const workspaceId = (formData.get('workspaceId') as string) || 'default';
 
+    // Validate file
     if (!file) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: ERROR_CODES.PROCESSING_ERROR,
+            code: ERROR_CODES.VALIDATION_ERROR,
             message: 'No file provided',
           },
         },
@@ -170,111 +60,155 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Read file buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // Calculate file hash
-    const hash = crypto.createHash('sha256').update(buffer).digest('hex');
-
-    // Determine file type and process
+    // Determine file type
     const fileName = file.name.toLowerCase();
-    let metadata;
-    let data;
-    let sheets = null;
+    let fileType: 'xlsx' | 'xls' | 'csv';
 
     if (fileName.endsWith('.csv')) {
-      const result = await processCSVFile(buffer, file.name, {
-        skipEmptyLines: true,
-        trimValues: true,
-        parseNumbers: true,
-        parseDates: true,
-        inferTypes: true,
-      });
-      metadata = result.metadata;
-      data = result.data;
-    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-      const result = await processExcelFile(buffer, file.name, {
-        skipEmptyLines: true,
-        trimValues: true,
-        parseNumbers: true,
-        parseDates: true,
-        inferTypes: true,
-      });
-      metadata = result.metadata;
-      data = result.data;
-      sheets = result.sheets;
+      fileType = 'csv';
+    } else if (fileName.endsWith('.xlsx')) {
+      fileType = 'xlsx';
+    } else if (fileName.endsWith('.xls')) {
+      fileType = 'xls';
     } else {
       return NextResponse.json(
         {
           success: false,
           error: {
             code: ERROR_CODES.INVALID_FILE_TYPE,
-            message: 'Invalid file type. Only Excel and CSV files are supported',
+            message: 'Invalid file type. Only Excel (.xlsx, .xls) and CSV files are supported',
           },
         },
         { status: 400 }
       );
     }
 
-    // Create session
-    const session = await db.createSession({
-      workspace_id: workspaceId,
-      name: sessionName || metadata.fileName,
-      original_file_name: metadata.fileName,
-      original_file_hash: hash,
-      row_count: metadata.rowCount,
-      column_count: metadata.columnCount,
-      file_size: metadata.fileSize,
-      file_type: metadata.fileType,
-    });
+    // Read file buffer
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
-    // Create default "All Data" view for the new session
-    await db.createView({
-      workspace_id: workspaceId,
-      session_id: session.id,
-      name: 'All Data',
-      description: 'View all data without any filters',
-      filter_config: JSON.stringify({ filters: [], combinator: 'AND' }),
-      category: 'System',
-      is_default: 1,
-    });
+    console.log(`[Upload] Processing ${fileType} file: ${file.name} (${file.size} bytes)`);
 
-    // Store file
-    const sanitizedFileName = sanitizeFilename(file.name);
-    const storagePath = await storage.save(session.id, sanitizedFileName, buffer);
-
-    // Create file record
-    await db.createFile({
-      session_id: session.id,
-      file_type: file.type,
-      storage_type: 'local',
-      storage_path: storagePath,
-    });
-
-    // Store data as JSON in a separate file
-    const dataBuffer = Buffer.from(JSON.stringify(data));
-    await storage.save(session.id, 'data.json', dataBuffer);
-
-    // Store sheets data if available (Excel files with multiple sheets)
-    if (sheets && sheets.length > 0) {
-      const sheetsBuffer = Buffer.from(JSON.stringify(sheets));
-      await storage.save(session.id, 'sheets.json', sheetsBuffer);
+    // Save to temporary file (required by DuckDB)
+    const tempDir = path.join(os.tmpdir(), 'magixcel-uploads');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
     }
+
+    const sanitizedFileName = sanitizeFilename(file.name);
+    tempFilePath = path.join(tempDir, `${Date.now()}-${sanitizedFileName}`);
+    fs.writeFileSync(tempFilePath, buffer);
+
+    console.log(`[Upload] Temp file saved: ${tempFilePath}`);
+
+    // Generate temporary Parquet path
+    tempParquetPath = path.join(tempDir, `${Date.now()}-data.parquet`);
+
+    // Convert to Parquet using DuckDB
+    const converter = createParquetConverter();
+    const conversionResult = await converter.convert({
+      inputPath: tempFilePath,
+      outputPath: tempParquetPath,
+      fileType,
+    });
+
+    await converter.close();
+
+    console.log(`[Upload] Conversion completed:`, {
+      parquetSize: conversionResult.metadata.parquetSize,
+      compressionRatio: `${(conversionResult.compressionRatio * 100).toFixed(2)}%`,
+      processingTime: `${conversionResult.processingTime}ms`,
+    });
+
+    // Create session in database (get ID first)
+    const sessionData = {
+      workspace_id: workspaceId,
+      name: sessionName || file.name.replace(/\.[^/.]+$/, ''), // Remove extension
+      original_file_name: file.name,
+      file_type: fileType,
+      file_size: file.size,
+      file_hash: conversionResult.fileHash,
+      r2_path_original: '', // Will be set after upload
+      r2_path_parquet: '', // Will be set after upload
+      metadata: conversionResult.metadata,
+    };
+
+    const session = await db.createSession(userId, sessionData);
+
+    console.log(`[Upload] Session created: ${session.id}`);
+
+    // Upload files to storage
+    const originalPath = getSessionFilePath(session.id, `original.${fileType}`);
+    const parquetPath = getSessionFilePath(session.id, 'data.parquet');
+
+    console.log(`[Upload] Uploading to storage...`);
+
+    // Upload original file
+    await storage.upload(originalPath, buffer, file.type);
+
+    // Upload Parquet file
+    const parquetBuffer = fs.readFileSync(tempParquetPath);
+    await storage.upload(parquetPath, parquetBuffer, 'application/octet-stream');
+
+    console.log(`[Upload] Files uploaded successfully`);
+
+    // Update session with storage paths
+    await db.updateSession(session.id, userId, {
+      r2_path_original: originalPath,
+      r2_path_parquet: parquetPath,
+    });
+
+    // Cleanup temp files
+    if (tempFilePath && fs.existsSync(tempFilePath)) {
+      fs.unlinkSync(tempFilePath);
+    }
+    if (tempParquetPath && fs.existsSync(tempParquetPath)) {
+      fs.unlinkSync(tempParquetPath);
+    }
+
+    console.log(`[Upload] Upload complete: ${session.id}`);
+
+    // Prepare response metadata
+    const responseMetadata = {
+      sessionId: session.id,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType,
+      sheets: conversionResult.metadata.sheets,
+      totalRows: conversionResult.metadata.totalRows,
+      totalColumns: conversionResult.metadata.totalColumns,
+      parquetSize: conversionResult.metadata.parquetSize,
+      compressionRatio: conversionResult.compressionRatio,
+      processingTime: conversionResult.processingTime,
+    };
 
     return NextResponse.json({
       success: true,
-      sessionId: session.id,
-      metadata,
+      data: responseMetadata,
     });
+
   } catch (error: any) {
-    console.error('Upload error:', error);
+    console.error('[Upload] Error:', error);
+
+    // Cleanup temp files on error
+    try {
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        fs.unlinkSync(tempFilePath);
+      }
+      if (tempParquetPath && fs.existsSync(tempParquetPath)) {
+        fs.unlinkSync(tempParquetPath);
+      }
+    } catch (cleanupError) {
+      console.error('[Upload] Cleanup error:', cleanupError);
+    }
+
     return NextResponse.json(
       {
         success: false,
         error: {
           code: ERROR_CODES.PROCESSING_ERROR,
           message: error.message || 'Failed to process file',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         },
       },
       { status: 500 }

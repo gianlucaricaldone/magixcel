@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 
 /**
  * GET /api/public/view/[publicLinkId]
@@ -10,6 +10,7 @@ export async function GET(
   { params }: { params: { publicLinkId: string } }
 ) {
   try {
+    const db = getDBAdapter();
     const view = await db.getViewByPublicLink(params.publicLinkId);
 
     if (!view || !view.is_public) {
@@ -22,12 +23,16 @@ export async function GET(
     // Increment access count
     await db.incrementViewAccessCount(view.id);
 
-    // Parse filter config
-    const filterConfig = JSON.parse(view.filter_config);
+    // Parse filter config if it's a string
+    const filterConfig = typeof view.filter_config === 'string'
+      ? JSON.parse(view.filter_config)
+      : view.filter_config;
 
     // For snapshot views, return the saved data
     if (view.view_type === 'snapshot' && view.snapshot_data) {
-      const snapshotData = JSON.parse(view.snapshot_data);
+      const snapshotData = Array.isArray(view.snapshot_data)
+        ? view.snapshot_data
+        : JSON.parse(JSON.stringify(view.snapshot_data));
 
       return NextResponse.json({
         success: true,

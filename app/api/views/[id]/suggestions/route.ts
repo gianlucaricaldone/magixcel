@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { suggestCharts } from '@/lib/charts/suggestions';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
@@ -12,8 +12,10 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     // Check if view exists
-    const view = await db.getView(params.id);
+    const view = await db.getView(params.id, userId);
     if (!view) {
       return NextResponse.json(
         { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },
@@ -23,7 +25,7 @@ export async function GET(
 
     // For snapshot views, we have the data
     if (view.view_type === 'snapshot' && view.snapshot_data) {
-      const data = JSON.parse(view.snapshot_data);
+      const data = Array.isArray(view.snapshot_data) ? view.snapshot_data : JSON.parse(JSON.stringify(view.snapshot_data));
 
       if (data.length === 0) {
         return NextResponse.json({
@@ -45,7 +47,7 @@ export async function GET(
     // For filters_only views, we need the session data
     if (view.session_id) {
       // Get session to access data
-      const session = await db.getSession(view.session_id);
+      const session = await db.getSession(view.session_id, userId);
       if (!session) {
         return NextResponse.json(
           { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'Session not found' } },

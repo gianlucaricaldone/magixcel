@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 export async function PUT(
@@ -7,10 +7,12 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const sessionId = params.id;
 
     // Validate session exists
-    const session = await db.getSession(sessionId);
+    const session = await db.getSession(sessionId, userId);
     if (!session) {
       return NextResponse.json(
         {
@@ -30,7 +32,7 @@ export async function PUT(
     // Save filters as JSON string
     const filtersJson = JSON.stringify(filtersBySheet);
 
-    await db.updateSession(sessionId, {
+    await db.updateSession(sessionId, userId, {
       active_filters: filtersJson,
     });
 

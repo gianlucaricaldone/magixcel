@@ -1,46 +1,53 @@
-import { IDatabase } from '@/types';
-import { SQLiteDB } from './sqlite';
-import { SupabaseDB } from './supabase';
-import path from 'path';
-
 /**
- * Database abstraction layer
+ * Database Compatibility Layer
  *
- * This module provides a unified interface to the database,
- * allowing seamless switching between SQLite (development) and Supabase (production).
+ * @deprecated This file provides backward compatibility with the old database interface.
+ * New code should use the adapter system directly:
  *
- * Usage:
- *   import { db } from '@/lib/db';
- *   const session = await db.getSession(id);
+ * @example
+ * ```typescript
+ * import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
+ *
+ * const db = getDBAdapter();
+ * const userId = getCurrentUserId();
+ * const workspaces = await db.listWorkspaces(userId);
+ * ```
+ *
+ * This wrapper will be removed in a future version once all code is migrated.
  */
 
-let dbInstance: IDatabase | null = null;
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
+import type { IDBAdapter } from '@/lib/adapters/db/interface';
 
-function getDatabase(): IDatabase {
-  if (dbInstance) {
-    return dbInstance;
-  }
+/**
+ * Database instance using new adapter system
+ * @deprecated Use getDBAdapter() directly instead
+ */
+export const db: IDBAdapter = getDBAdapter();
 
-  const dbType = process.env.DATABASE_TYPE || 'sqlite';
+/**
+ * Get current user ID for database operations
+ * @deprecated Use getCurrentUserId() from factory instead
+ */
+export const getUserId = getCurrentUserId;
 
-  if (dbType === 'supabase') {
-    dbInstance = new SupabaseDB();
-  } else {
-    // SQLite
-    const dbUrl = process.env.DATABASE_URL || 'file:./data/magixcel.db';
-    const dbPath = dbUrl.replace('file:', '');
-    const absolutePath = path.isAbsolute(dbPath)
-      ? dbPath
-      : path.join(process.cwd(), dbPath);
+/**
+ * Re-export types from adapter interface for backward compatibility
+ */
+export type {
+  IDBAdapter,
+  IWorkspace,
+  ISession,
+  ISessionMetadata,
+  IFilter,
+  IActiveFiltersState,
+  FilterOperator,
+  IFilterPreset,
+  IActiveView,
+} from '@/lib/adapters/db/interface';
 
-    dbInstance = new SQLiteDB(absolutePath);
-  }
-
-  return dbInstance;
-}
-
-export const db = getDatabase();
-
-// Export types and classes for testing
-export type { IDatabase };
-export { SQLiteDB, SupabaseDB };
+/**
+ * Legacy type exports
+ * @deprecated Import from '@/lib/adapters/db/interface' instead
+ */
+export type { IDatabase } from '@/types';

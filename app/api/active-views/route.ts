@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
@@ -8,6 +8,7 @@ import { ERROR_CODES } from '@/lib/utils/constants';
  */
 export async function GET(request: NextRequest) {
   try {
+    const db = getDBAdapter();
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
     const sheetName = searchParams.get('sheetName');
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const db = getDBAdapter();
     const body = await request.json();
     const { sessionId, sheetName, viewId } = body;
 
@@ -95,6 +97,7 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const db = getDBAdapter();
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
     const sheetName = searchParams.get('sheetName');

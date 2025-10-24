@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
@@ -9,22 +9,19 @@ import { ERROR_CODES } from '@/lib/utils/constants';
  */
 export async function GET(request: NextRequest) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get('workspaceId');
 
     // Get all sessions (optionally filtered by workspace)
-    let sessions;
-    if (workspaceId) {
-      sessions = await db.listSessionsByWorkspace(workspaceId, 1000, 0);
-    } else {
-      sessions = await db.listSessions(1000, 0);
-    }
+    const sessions = await db.listSessions(userId, workspaceId || undefined, 1000, 0);
 
     // Group sessions by file_hash to get unique files
     const fileMap = new Map();
 
     for (const session of sessions) {
-      const hash = session.original_file_hash;
+      const hash = session.file_hash;
 
       if (!fileMap.has(hash)) {
         // This is the first session with this file
@@ -33,8 +30,8 @@ export async function GET(request: NextRequest) {
           file_name: session.original_file_name,
           file_type: session.file_type,
           file_size: session.file_size,
-          row_count: session.row_count,
-          column_count: session.column_count,
+          row_count: session.metadata?.totalRows || 0,
+          column_count: session.metadata?.totalColumns || 0,
           first_imported: session.created_at,
           usage_count: 1,
           example_session_id: session.id, // For reference when creating new session

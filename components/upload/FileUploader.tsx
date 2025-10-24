@@ -65,11 +65,23 @@ export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
 
       const result = await response.json();
 
-      if (result.success && result.sessionId && result.metadata) {
-        setSession(result.sessionId, result.metadata);
+      if (result.success && result.data) {
+        const { sessionId, sheets, totalRows, totalColumns } = result.data;
+
+        // Create metadata in old format for compatibility
+        const metadata = {
+          sheets,
+          totalRows,
+          totalColumns,
+          fileName: result.data.fileName,
+          fileSize: result.data.fileSize,
+          fileType: result.data.fileType,
+        };
+
+        setSession(sessionId, metadata);
 
         // Fetch full data
-        const dataResponse = await fetch(`/api/session/${result.sessionId}/data`);
+        const dataResponse = await fetch(`/api/session/${sessionId}/data`);
         const dataResult = await dataResponse.json();
 
         if (dataResult.success && dataResult.data) {
@@ -77,7 +89,7 @@ export function FileUploader({ workspaceId = 'default' }: FileUploaderProps) {
         }
 
         setUploadProgress(100);
-        router.push(`/app/workspace/${workspaceId}/session/${result.sessionId}`);
+        router.push(`/app/workspace/${workspaceId}/session/${sessionId}`);
       } else {
         throw new Error('Upload failed');
       }

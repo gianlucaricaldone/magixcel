@@ -33,8 +33,8 @@ export function WorkspaceGrid({ onCreateWorkspace }: WorkspaceGridProps) {
     try {
       const response = await fetch('/api/workspace');
       const result = await response.json();
-      if (result.success) {
-        setWorkspaces(result.workspaces);
+      if (result.success && result.data) {
+        setWorkspaces(result.data);
       }
     } catch (error) {
       console.error('Failed to load workspaces:', error);

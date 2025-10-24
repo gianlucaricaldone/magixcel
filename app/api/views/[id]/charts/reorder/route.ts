@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
@@ -11,6 +11,8 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const body = await request.json();
     const { chartIds } = body;
 
@@ -23,7 +25,7 @@ export async function PUT(
     }
 
     // Check if view exists
-    const view = await db.getView(params.id);
+    const view = await db.getView(params.id, userId);
     if (!view) {
       return NextResponse.json(
         { success: false, error: { code: ERROR_CODES.NOT_FOUND, message: 'View not found' } },

@@ -22,6 +22,7 @@ export function ViewSheetTabs({
     <div className="h-10 bg-slate-50 border-t flex items-center px-2 gap-1 overflow-x-auto">
       {openViews.map((view) => {
         const isActive = view.id === activeViewId;
+        const isFilteredView = !view.is_default; // Filtered views have is_default=0 or undefined
 
         return (
           <div
@@ -31,7 +32,11 @@ export function ViewSheetTabs({
               transition-colors min-w-[120px] max-w-[200px]
               ${
                 isActive
-                  ? 'bg-white border-t-2 border-blue-500 text-slate-900 font-medium'
+                  ? isFilteredView
+                    ? 'bg-blue-50 border-t-2 border-blue-500 text-blue-900 font-medium'
+                    : 'bg-white border-t-2 border-slate-400 text-slate-900 font-medium'
+                  : isFilteredView
+                  ? 'bg-blue-100/50 hover:bg-blue-100 text-blue-700'
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
               }
             `}

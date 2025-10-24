@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 /**
@@ -11,13 +11,15 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const workspaceId = params.id;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
     // Validate workspace exists
-    const workspace = await db.getWorkspace(workspaceId);
+    const workspace = await db.getWorkspace(workspaceId, userId);
     if (!workspace) {
       return NextResponse.json(
         {
@@ -32,7 +34,7 @@ export async function GET(
     }
 
     // Get sessions for this workspace
-    const sessions = await db.listSessionsByWorkspace(workspaceId, limit, offset);
+    const sessions = await db.listSessions(userId, workspaceId, limit, offset);
 
     return NextResponse.json({
       success: true,

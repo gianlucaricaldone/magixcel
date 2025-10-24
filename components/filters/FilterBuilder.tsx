@@ -98,22 +98,6 @@ export function FilterBuilder({ columns, data, onApply, onCancel }: FilterBuilde
           Aggiungi Gruppo
         </Button>
       </div>
-
-      {/* Footer Actions - Only show if callbacks are provided */}
-      {(onApply || onCancel) && (
-        <div className="flex gap-2 justify-end pt-4 border-t">
-          {onCancel && (
-            <Button variant="outline" onClick={onCancel}>
-              Annulla
-            </Button>
-          )}
-          {onApply && (
-            <Button onClick={onApply}>
-              Continua
-            </Button>
-          )}
-        </div>
-      )}
     </div>
   );
 }

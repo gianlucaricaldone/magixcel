@@ -1,21 +1,52 @@
+/**
+ * Filter API Route (Refactored)
+ *
+ * Handles data filtering with new architecture:
+ * - Queries Parquet files using DuckDB
+ * - Uses Query Builder to generate optimized SQL
+ * - Caches results using Cache Adapter
+ * - Sub-100ms response times for 100k+ row files
+ */
+
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { storage } from '@/lib/storage';
-import { applyFilters, validateFilterConfig, generateFilterHash } from '@/lib/processing/filter-engine';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
+import { getStorageAdapter } from '@/lib/adapters/storage/factory';
+import { getCacheAdapter } from '@/lib/adapters/cache/factory';
+import { CacheKeys, DEFAULT_CACHE_TTL } from '@/lib/adapters/cache/interface';
+import { createDuckDBClient } from '@/lib/duckdb/client';
+import { createQueryBuilder, DuckDBQueryBuilder } from '@/lib/duckdb/query-builder';
+import { LocalStorageAdapter } from '@/lib/adapters/storage/local';
 import { ERROR_CODES, DEFAULT_PAGE_SIZE } from '@/lib/utils/constants';
-import { IFilterConfig } from '@/types';
+import { IFilter } from '@/types/database';
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { sessionId, filters, combinator, pagination, globalSearch } = body;
+  const duckdb = createDuckDBClient();
 
+  try {
+    const db = getDBAdapter();
+    const storage = getStorageAdapter();
+    const cache = getCacheAdapter();
+    const userId = getCurrentUserId();
+
+    // Parse request body
+    const body = await request.json();
+    const {
+      sessionId,
+      sheetName = null,
+      filters = [],
+      combinator = 'AND',
+      globalSearch = '',
+      sortBy = null,
+      pagination = { page: 1, pageSize: DEFAULT_PAGE_SIZE },
+    } = body;
+
+    // Validate session ID
     if (!sessionId) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: ERROR_CODES.SESSION_NOT_FOUND,
+            code: ERROR_CODES.VALIDATION_ERROR,
             message: 'Session ID is required',
           },
         },
@@ -23,8 +54,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate session
-    const session = await db.getSession(sessionId);
+    // Get session from database
+    const session = await db.getSession(sessionId, userId);
     if (!session) {
       return NextResponse.json(
         {
@@ -38,16 +69,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate filter config
-    const filterConfig: IFilterConfig = { filters, combinator };
-    const validation = validateFilterConfig(filterConfig);
-    if (!validation.valid) {
+    // Validate filters
+    const validationErrors = DuckDBQueryBuilder.validateFilters(filters);
+    if (validationErrors.length > 0) {
       return NextResponse.json(
         {
           success: false,
           error: {
-            code: ERROR_CODES.INVALID_FILTER,
-            message: validation.error,
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: 'Invalid filter configuration',
+            details: validationErrors,
           },
         },
         { status: 400 }
@@ -55,67 +86,122 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate filter hash for caching
-    const filterHash = generateFilterHash(filterConfig);
+    const filterOptions = { filters, combinator, globalSearch, sortBy, pagination };
+    const filterHash = DuckDBQueryBuilder.generateFilterHash(filterOptions);
 
     // Check cache
-    const cached = await db.getCachedResult(sessionId, filterHash);
-    if (cached) {
-      const cachedData = JSON.parse(cached.result_data);
+    const cacheKey = CacheKeys.filterQuery(sessionId, filterHash, pagination.page);
+    const cachedResult = await cache.get(cacheKey);
+
+    if (cachedResult) {
+      console.log(`[Filter] Cache HIT for ${sessionId}:${filterHash}`);
       return NextResponse.json({
         success: true,
-        results: cachedData,
-        filterHash,
+        data: cachedResult,
         cached: true,
+        executionTime: 0,
       });
     }
 
-    // Load data
-    const dataBuffer = await storage.get(`${sessionId}/data.json`);
-    const data = JSON.parse(dataBuffer.toString('utf8'));
+    console.log(`[Filter] Cache MISS for ${sessionId}:${filterHash}`);
 
-    // Apply filters
-    const filteredData = applyFilters(data, filterConfig, globalSearch);
+    // Get Parquet file path
+    let parquetPath: string;
+    if (storage instanceof LocalStorageAdapter) {
+      // For local storage, get absolute path for DuckDB to read directly
+      parquetPath = storage.getAbsolutePath(session.r2_path_parquet);
+    } else {
+      // For R2, use HTTP URL (DuckDB can read from HTTP)
+      parquetPath = await storage.getPublicUrl(session.r2_path_parquet);
+    }
 
-    // Pagination
-    const page = pagination?.page || 1;
-    const pageSize = pagination?.pageSize || DEFAULT_PAGE_SIZE;
-    const totalPages = Math.ceil(filteredData.length / pageSize);
-    const start = (page - 1) * pageSize;
-    const paginatedData = filteredData.slice(start, start + pageSize);
+    console.log(`[Filter] Querying Parquet: ${parquetPath}`);
 
-    const results = {
-      data: paginatedData,
-      totalRows: data.length,
-      filteredRows: filteredData.length,
-      page,
-      pageSize,
-      totalPages,
+    // Build SQL query
+    const queryBuilder = createQueryBuilder({
+      sessionId: session.id,
+      sheetName,
+      parquetPath,
+    });
+
+    // Set available columns for global search
+    const firstSheet = session.metadata.sheets[0];
+    if (firstSheet) {
+      const columnNames = firstSheet.columns.map(c => c.name);
+      queryBuilder.setAvailableColumns(columnNames);
+    }
+
+    // Build data query
+    const dataQuery = queryBuilder.buildQuery(filterOptions);
+
+    // Build count query (for pagination)
+    const countQuery = queryBuilder.buildCountQuery({ filters, combinator, globalSearch });
+
+    console.log(`[Filter] Executing queries...`);
+    const startTime = Date.now();
+
+    // Connect to DuckDB
+    await duckdb.connect();
+
+    // Execute queries in parallel
+    const [dataResult, countResult] = await Promise.all([
+      duckdb.query(dataQuery),
+      duckdb.query(countQuery),
+    ]);
+
+    const executionTime = Date.now() - startTime;
+
+    // Get total row count (unfiltered)
+    const totalRows = sheetName
+      ? session.metadata.sheets.find(s => s.name === sheetName)?.rowCount || 0
+      : session.metadata.totalRows;
+
+    const filteredRows = countResult.rows[0]?.total || 0;
+
+    // Prepare response
+    const response = {
+      rows: dataResult.rows,
+      totalRows,
+      filteredRows,
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      totalPages: Math.ceil(filteredRows / pagination.pageSize),
+      executionTime,
+      columns: dataResult.columns,
     };
 
-    // Cache results
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-    await db.createCachedResult({
-      session_id: sessionId,
-      filter_hash: filterHash,
-      result_count: filteredData.length,
-      result_data: JSON.stringify(results),
-      expires_at: expiresAt.toISOString(),
-    });
+    // Cache the result
+    await cache.set(cacheKey, response, DEFAULT_CACHE_TTL.FILTER_QUERY);
+
+    console.log(`[Filter] Query executed in ${executionTime}ms (${filteredRows} / ${totalRows} rows)`);
+
+    // Close DuckDB connection
+    await duckdb.close();
 
     return NextResponse.json({
       success: true,
-      results,
-      filterHash,
+      data: response,
       cached: false,
+      executionTime,
     });
+
   } catch (error: any) {
-    console.error('Filter error:', error);
+    console.error('[Filter] Error:', error);
+
+    // Clean up DuckDB connection
+    try {
+      await duckdb.close();
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+
     return NextResponse.json(
       {
         success: false,
         error: {
           code: ERROR_CODES.PROCESSING_ERROR,
           message: error.message || 'Failed to apply filters',
+          details: process.env.NODE_ENV === 'development' ? error.stack : undefined,
         },
       },
       { status: 500 }

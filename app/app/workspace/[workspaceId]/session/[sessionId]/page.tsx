@@ -46,12 +46,10 @@ export default function SessionPage() {
   const [openViews, setOpenViews] = useState<IView[]>([]);
   const [activeViewId, setActiveViewId] = useState<string | null>(null);
   const [isViewPickerOpen, setIsViewPickerOpen] = useState(false);
-  const [isFilterBuilderOpen, setIsFilterBuilderOpen] = useState(false);
-  const [showSaveViewDialog, setShowSaveViewDialog] = useState(false);
+  const [isCreateViewOpen, setIsCreateViewOpen] = useState(false);
   const [viewName, setViewName] = useState('');
   const [viewDescription, setViewDescription] = useState('');
   const [viewCategory, setViewCategory] = useState('Custom');
-  const [capturedFilterConfig, setCapturedFilterConfig] = useState<any>(null);
 
   // Columns from data
   const columns = useMemo(() => {
@@ -125,16 +123,94 @@ export default function SessionPage() {
     }
   }, [workspaceId, sessionId, loadViews]);
 
-  // Auto-open "All Data" view on load
+  // Restore open views from database or auto-open "All Data" view
   useEffect(() => {
-    if (views.length > 0 && openViews.length === 0) {
-      const allDataView = views.find((v) => v.is_default === 1);
-      if (allDataView) {
-        setOpenViews([allDataView]);
-        setActiveViewId(allDataView.id);
+    const restoreViewsFromDB = async () => {
+      if (views.length > 0 && openViews.length === 0) {
+        try {
+          // Fetch views state from database
+          const response = await fetch(`/api/session/${sessionId}/views-state`);
+          const result = await response.json();
+
+          if (result.success && result.viewsState) {
+            const { openViewIds, activeViewId: savedActiveViewId } = result.viewsState;
+
+            if (openViewIds && openViewIds.length > 0) {
+              // Match saved IDs with loaded views
+              const restoredViews = openViewIds
+                .map((id: string) => views.find((v) => v.id === id))
+                .filter((v): v is IView => v !== undefined);
+
+              if (restoredViews.length > 0) {
+                setOpenViews(restoredViews);
+                // Restore active view if it's in the restored views
+                if (savedActiveViewId && restoredViews.some((v) => v.id === savedActiveViewId)) {
+                  setActiveViewId(savedActiveViewId);
+                } else {
+                  // Default to first restored view
+                  setActiveViewId(restoredViews[0].id);
+                }
+                return;
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error restoring views from database:', error);
+        }
+
+        // Fallback: auto-open "All Data" view
+        const allDataView = views.find((v) => v.is_default === 1);
+        if (allDataView) {
+          setOpenViews([allDataView]);
+          setActiveViewId(allDataView.id);
+        }
       }
-    }
-  }, [views]);
+    };
+
+    restoreViewsFromDB();
+  }, [views, sessionId]);
+
+  // Persist open views to database
+  useEffect(() => {
+    const saveViewsToDB = async () => {
+      if (openViews.length > 0) {
+        const viewIds = openViews.map((v) => v.id);
+        try {
+          await fetch(`/api/session/${sessionId}/views-state`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              openViewIds: viewIds,
+              activeViewId: activeViewId,
+            }),
+          });
+        } catch (error) {
+          console.error('Error saving views state to database:', error);
+        }
+      } else {
+        // Clear state when no views are open
+        try {
+          await fetch(`/api/session/${sessionId}/views-state`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              openViewIds: [],
+              activeViewId: null,
+            }),
+          });
+        } catch (error) {
+          console.error('Error clearing views state in database:', error);
+        }
+      }
+    };
+
+    // Debounce save to avoid too many DB writes
+    const timeoutId = setTimeout(() => {
+      saveViewsToDB();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [openViews, activeViewId, sessionId]);
 
   // Get active view
   const activeView = useMemo(() => {
@@ -182,7 +258,10 @@ export default function SessionPage() {
   };
 
   const handleCreateView = () => {
-    setIsFilterBuilderOpen(true);
+    setIsCreateViewOpen(true);
+    setViewName('');
+    setViewDescription('');
+    setViewCategory('Custom');
   };
 
   const handleSaveNewView = async () => {
@@ -191,31 +270,31 @@ export default function SessionPage() {
       return;
     }
 
-    if (!capturedFilterConfig) {
-      alert('No filter configuration captured');
-      return;
-    }
-
     try {
-      await saveView({
+      // Call saveView with correct signature: (name, options)
+      const result = await saveView(viewName, {
         workspaceId,
         sessionId,
-        sheetName: activeSheet,
-        name: viewName,
         description: viewDescription,
         category: viewCategory,
-        filterConfig: capturedFilterConfig,
       });
 
-      // Reload views for the current sheet
-      loadViews(workspaceId, sessionId, activeSheet);
+      if (result.success && result.view) {
+        // Reload views for the workspace
+        await loadViews(workspaceId, sessionId);
 
-      // Reset state
-      setShowSaveViewDialog(false);
-      setViewName('');
-      setViewDescription('');
-      setViewCategory('Custom');
-      setCapturedFilterConfig(null);
+        // Auto-open the newly created view as a blue tab
+        setOpenViews([...openViews, result.view]);
+        setActiveViewId(result.view.id);
+
+        // Reset state and close dialog
+        setIsCreateViewOpen(false);
+        setViewName('');
+        setViewDescription('');
+        setViewCategory('Custom');
+      } else {
+        alert(`Failed to save view: ${result.error || 'Unknown error'}`);
+      }
     } catch (error) {
       console.error('Error saving view:', error);
       alert('Failed to save view');
@@ -301,68 +380,62 @@ export default function SessionPage() {
         openViewIds={openViews.map((v) => v.id)}
       />
 
-      {/* Filter Builder Dialog (for Create View) */}
-      <Dialog open={isFilterBuilderOpen} onOpenChange={setIsFilterBuilderOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh]">
+      {/* Create View Dialog - Unified (Nome + Filtri) */}
+      <Dialog open={isCreateViewOpen} onOpenChange={setIsCreateViewOpen}>
+        <DialogContent className="max-w-5xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle>Crea Nuova View</DialogTitle>
             <DialogDescription>
-              Configura i filtri per la tua view
+              Configura nome e filtri per la tua view
             </DialogDescription>
           </DialogHeader>
-          <div className="overflow-y-auto">
-            <FilterBuilder
-              columns={columns}
-              data={data}
-              onApply={() => {
-                // Capture the current filter configuration from the store
-                const filterConfig = getFilterConfig();
-                setCapturedFilterConfig(filterConfig);
-                setIsFilterBuilderOpen(false);
-                setShowSaveViewDialog(true);
-              }}
-              onCancel={() => {
-                setIsFilterBuilderOpen(false);
-              }}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
 
-      {/* Save View Dialog */}
-      <Dialog open={showSaveViewDialog} onOpenChange={setShowSaveViewDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Salva View</DialogTitle>
-            <DialogDescription>
-              Dai un nome alla tua view
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div>
-              <Label htmlFor="view-name">Nome *</Label>
-              <Input
-                id="view-name"
-                value={viewName}
-                onChange={(e) => setViewName(e.target.value)}
-                placeholder="Es: Clienti VIP"
-              />
+          <div className="flex-1 overflow-y-auto space-y-6 py-4">
+            {/* Nome e Descrizione */}
+            <div className="space-y-4 px-1">
+              <div>
+                <Label htmlFor="view-name">Nome View *</Label>
+                <Input
+                  id="view-name"
+                  value={viewName}
+                  onChange={(e) => setViewName(e.target.value)}
+                  placeholder="Es: Clienti VIP, Ordini Q1 2024..."
+                  className="mt-1.5"
+                />
+              </div>
+              <div>
+                <Label htmlFor="view-description">Descrizione (opzionale)</Label>
+                <Textarea
+                  id="view-description"
+                  value={viewDescription}
+                  onChange={(e) => setViewDescription(e.target.value)}
+                  placeholder="Descrivi questa view..."
+                  className="mt-1.5"
+                  rows={2}
+                />
+              </div>
             </div>
+
+            {/* Divider */}
+            <div className="border-t" />
+
+            {/* Filter Builder */}
             <div>
-              <Label htmlFor="view-description">Descrizione</Label>
-              <Textarea
-                id="view-description"
-                value={viewDescription}
-                onChange={(e) => setViewDescription(e.target.value)}
-                placeholder="Descrivi questa view..."
+              <h4 className="text-sm font-medium text-slate-900 mb-3 px-1">Filtri</h4>
+              <FilterBuilder
+                columns={columns}
+                data={data}
               />
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowSaveViewDialog(false)}>
+
+          <DialogFooter className="border-t pt-4">
+            <Button variant="outline" onClick={() => setIsCreateViewOpen(false)}>
               Annulla
             </Button>
-            <Button onClick={handleSaveNewView}>Salva View</Button>
+            <Button onClick={handleSaveNewView} disabled={!viewName.trim()}>
+              Crea View
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

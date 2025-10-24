@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 import { ViewChart } from '@/types/charts';
 
@@ -12,6 +12,7 @@ export async function GET(
   { params }: { params: { id: string; chartId: string } }
 ) {
   try {
+    const db = getDBAdapter();
     const chart = await db.getViewChart(params.chartId);
 
     if (!chart) {
@@ -57,6 +58,7 @@ export async function PUT(
   { params }: { params: { id: string; chartId: string } }
 ) {
   try {
+    const db = getDBAdapter();
     const body = await request.json();
     const { title, config, size, position } = body;
 
@@ -84,17 +86,18 @@ export async function PUT(
     if (position !== undefined) updates.position = position;
 
     if (config !== undefined) {
-      // Validate config is valid JSON
-      try {
-        const configString = typeof config === 'string' ? config : JSON.stringify(config);
-        JSON.parse(configString); // Validate
-        updates.config = configString;
-      } catch (e) {
-        return NextResponse.json(
-          { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid chart configuration JSON' } },
-          { status: 400 }
-        );
+      // Validate config is valid JSON if it's a string
+      if (typeof config === 'string') {
+        try {
+          JSON.parse(config);
+        } catch (e) {
+          return NextResponse.json(
+            { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'Invalid chart configuration JSON' } },
+            { status: 400 }
+          );
+        }
       }
+      updates.config = config;
     }
 
     // Update chart
@@ -128,6 +131,7 @@ export async function DELETE(
   { params }: { params: { id: string; chartId: string } }
 ) {
   try {
+    const db = getDBAdapter();
     // Check if chart exists
     const existing = await db.getViewChart(params.chartId);
     if (!existing) {
