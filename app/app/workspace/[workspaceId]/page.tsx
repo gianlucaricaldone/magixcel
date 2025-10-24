@@ -30,7 +30,7 @@ export default function WorkspacePage() {
       const result = await response.json();
 
       if (result.success) {
-        setWorkspace(result.workspace);
+        setWorkspace(result.data);
       } else {
         console.error('Workspace not found');
         router.push('/app');
