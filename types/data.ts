@@ -24,6 +24,8 @@ export interface IFileMetadata {
   columns: string[];
   preview: any[];
   columnTypes?: IColumnType[];
+  sheetCount?: number; // Number of sheets (Excel only)
+  sheetNames?: string[]; // Names of all sheets (Excel only)
 }
 
 export interface IFilterResult {

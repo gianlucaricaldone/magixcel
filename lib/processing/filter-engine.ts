@@ -84,13 +84,13 @@ function matchFilter(row: any, filter: IFilter): boolean {
     case 'greaterThan':
       return Number(value) > Number(filterValue);
 
-    case 'greaterThanOrEquals':
+    case 'greaterThanOrEqual':
       return Number(value) >= Number(filterValue);
 
     case 'lessThan':
       return Number(value) < Number(filterValue);
 
-    case 'lessThanOrEquals':
+    case 'lessThanOrEqual':
       return Number(value) <= Number(filterValue);
 
     case 'between':
@@ -156,9 +156,10 @@ export function validateFilterConfig(config: IFilterConfig): { valid: boolean; e
   for (const item of config.filters) {
     if ('type' in item && item.type === 'group') {
       // Validate group recursively
+      const group = item as unknown as IFilterGroup;
       const groupValid = validateFilterConfig({
-        filters: item.filters,
-        combinator: item.combinator,
+        filters: group.filters,
+        combinator: group.combinator,
       });
       if (!groupValid.valid) return groupValid;
     } else {

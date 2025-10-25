@@ -1,24 +1,21 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Plus, X, Search, Layers } from 'lucide-react';
+import { Plus, X, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFilterStore } from '@/stores/filter-store';
-import { useDataStore } from '@/stores/data-store';
 import { FilterOperator, IFilter, IFilterGroup } from '@/types';
-import { applyFilters } from '@/lib/processing/filter-engine';
-import { useDebounce } from '@/lib/hooks/useDebounce';
-import { FilterPresets } from './FilterPresets';
+// FilterPresets removed - views are now managed in ViewsTab
+// import { FilterPresets } from './FilterPresets';
 
 interface FilterBuilderProps {
   columns: string[];
+  data?: any[]; // For preview/compatibility
+  onApply?: () => void; // Called when user wants to save the filter
+  onCancel?: () => void; // Called when user wants to cancel
 }
 
-export function FilterBuilder({ columns }: FilterBuilderProps) {
+export function FilterBuilder({ columns, data, onApply, onCancel }: FilterBuilderProps) {
   const {
-    filters,
-    combinator,
-    liveFiltering,
     addFilter,
     updateFilter,
     removeFilter,
@@ -28,10 +25,10 @@ export function FilterBuilder({ columns }: FilterBuilderProps) {
     setCombinator,
     getFilterConfig
   } = useFilterStore();
-  const { data, setFilteredData } = useDataStore();
 
-  const [globalSearch, setGlobalSearch] = useState('');
-  const debouncedGlobalSearch = useDebounce(globalSearch, 300);
+  // Get filters from the active sheet
+  const filterConfig = getFilterConfig();
+  const { filters, combinator } = filterConfig;
 
   const operators: FilterOperator[] = [
     'equals',
@@ -43,48 +40,12 @@ export function FilterBuilder({ columns }: FilterBuilderProps) {
     'isNotNull',
   ];
 
-  // Apply filters live whenever filters or global search changes (only if liveFiltering is enabled)
-  useEffect(() => {
-    if (data.length === 0 || !liveFiltering) return;
-
-    const filterConfig = getFilterConfig();
-    const filtered = applyFilters(data, filterConfig, debouncedGlobalSearch);
-    setFilteredData(filtered);
-  }, [filters, combinator, debouncedGlobalSearch, data, liveFiltering]);
-
-  // Manual apply filters function
-  const handleApplyFilters = () => {
-    if (data.length === 0) return;
-
-    const filterConfig = getFilterConfig();
-    const filtered = applyFilters(data, filterConfig, globalSearch);
-    setFilteredData(filtered);
-  };
+  // NOTE: Filter application is handled by the session page useEffect
+  // No need to apply filters here to avoid infinite loops
 
   return (
     <div className="space-y-4">
-      {/* Filter Presets */}
-      <FilterPresets />
-
-      {/* Global Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <input
-          type="text"
-          value={globalSearch}
-          onChange={(e) => setGlobalSearch(e.target.value)}
-          placeholder="Search across all columns..."
-          className="w-full pl-10 pr-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        {globalSearch && (
-          <button
-            onClick={() => setGlobalSearch('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
+      {/* Filter Presets removed - views are now managed in ViewsTab */}
 
       {/* Root Combinator */}
       {filters.length > 1 && (
@@ -136,13 +97,6 @@ export function FilterBuilder({ columns }: FilterBuilderProps) {
           <Layers className="h-4 w-4 mr-2" />
           Aggiungi Gruppo
         </Button>
-
-        {/* Status Message */}
-        {liveFiltering && (filters.length > 0 || globalSearch) && (
-          <span className="text-sm text-green-600 font-medium ml-auto">
-            ✓ Filtri applicati automaticamente
-          </span>
-        )}
       </div>
     </div>
   );

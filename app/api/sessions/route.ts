@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDBAdapter, getCurrentUserId } from '@/lib/adapters/db/factory';
 import { ERROR_CODES } from '@/lib/utils/constants';
 
 export async function GET(request: NextRequest) {
   try {
+    const db = getDBAdapter();
+    const userId = getCurrentUserId();
     const searchParams = request.nextUrl.searchParams;
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const sessions = await db.listSessions(limit, offset);
+    const sessions = await db.listSessions(userId, undefined, limit, offset);
 
     return NextResponse.json({
       success: true,

@@ -1,23 +1,23 @@
 'use client';
 
-import { Plus, X, Check } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFilterStore } from '@/stores/filter-store';
 import { IFilter, IFilterGroup } from '@/types';
 
 interface FilterPanelProps {
   onOpenFilterBuilder: () => void;
-  onApplyFilters: () => void;
 }
 
-export function FilterPanel({ onOpenFilterBuilder, onApplyFilters }: FilterPanelProps) {
+export function FilterPanel({ onOpenFilterBuilder }: FilterPanelProps) {
   const {
-    filters,
-    combinator,
-    liveFiltering,
     clearFilters,
     removeFilter,
+    getFilterConfig,
   } = useFilterStore();
+
+  const filterConfig = getFilterConfig();
+  const { filters, combinator } = filterConfig;
 
   const flattenFilters = (items: (IFilter | IFilterGroup)[]): IFilter[] => {
     const result: IFilter[] = [];
@@ -104,21 +104,6 @@ export function FilterPanel({ onOpenFilterBuilder, onApplyFilters }: FilterPanel
         </div>
       )}
 
-      {/* Apply Filters Button (Manual Mode) */}
-      {!liveFiltering && filterCount > 0 && (
-        <div className="pt-2">
-          <Button
-            onClick={onApplyFilters}
-            variant="default"
-            size="sm"
-            className="w-full h-10 bg-blue-600 hover:bg-blue-700"
-          >
-            <Check className="h-4 w-4 mr-2" />
-            Applica Filtri
-          </Button>
-        </div>
-      )}
-
       {/* Action Buttons */}
       <div className="pt-2 border-t border-slate-200">
         <Button
@@ -131,15 +116,6 @@ export function FilterPanel({ onOpenFilterBuilder, onApplyFilters }: FilterPanel
           Gestisci Filtri
         </Button>
       </div>
-
-      {/* Info Text */}
-      {!liveFiltering && filterCount > 0 && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-          <p className="text-xs text-amber-800">
-            <strong>Modalità manuale:</strong> Clicca "Applica Filtri" per aggiornare i risultati.
-          </p>
-        </div>
-      )}
     </div>
   );
 }

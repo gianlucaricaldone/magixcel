@@ -1,19 +1,30 @@
 import { create } from 'zustand';
 import { IFilter, IFilterGroup, IFilterConfig, FilterCombinator } from '@/types';
-import { IFilterPreset } from '@/types/database';
+import { IView, ViewType } from '@/types/database';
 import { nanoid } from 'nanoid';
 
 /**
- * Filter state management with support for grouped filters
+ * Filter state management with support for grouped filters and per-sheet filters
  */
 
-interface FilterState {
+interface SheetFilters {
   filters: (IFilter | IFilterGroup)[];
   combinator: FilterCombinator;
+}
+
+interface FilterState {
+  // Per-sheet filters
+  filtersBySheet: Record<string, SheetFilters>;
+  activeSheet: string | null;
+
+  // Legacy single filters (for CSV files without sheets)
+  filters: (IFilter | IFilterGroup)[];
+  combinator: FilterCombinator;
+
   activeFilterHash: string | null;
-  liveFiltering: boolean;
-  presets: IFilterPreset[];
-  presetsLoading: boolean;
+  views: IView[];
+  viewsLoading: boolean;
+  currentViewId: string | null;
 
   // Filter Actions
   addFilter: (filter: Omit<IFilter, 'id'>, groupId?: string) => void;
@@ -23,52 +34,123 @@ interface FilterState {
   updateGroup: (id: string, combinator: FilterCombinator) => void;
   removeGroup: (id: string) => void;
   clearFilters: () => void;
+  clearAllFilters: () => void; // Clear filters for ALL sheets (used when switching sessions)
   setCombinator: (combinator: FilterCombinator) => void;
   setActiveFilterHash: (hash: string | null) => void;
-  setLiveFiltering: (enabled: boolean) => void;
+  setActiveSheet: (sheetName: string | null) => void;
+  restoreFiltersBySheet: (filtersBySheet: Record<string, SheetFilters>) => void;
   getFilterConfig: () => IFilterConfig;
 
-  // Preset Actions
+  // View Actions
+  loadViews: (workspaceId?: string, sessionId?: string) => Promise<void>;
+  saveView: (
+    name: string,
+    options: {
+      workspaceId: string; // REQUIRED
+      sessionId: string; // REQUIRED
+      description?: string;
+      category?: string;
+      viewType?: ViewType;
+      isPublic?: boolean;
+      snapshotData?: any[];
+    }
+  ) => Promise<{ success: boolean; error?: string; view?: IView; publicLink?: string }>;
+  loadView: (id: string) => Promise<void>;
+  updateView: (id: string, updates: { name?: string; description?: string; category?: string; filterConfig?: IFilterConfig; isPublic?: boolean }) => Promise<{ success: boolean; error?: string }>;
+  deleteView: (id: string) => Promise<void>;
+  shareView: (id: string) => Promise<string | null>;
+
+  // Backward compatibility aliases
   loadPresets: () => Promise<void>;
-  savePreset: (name: string, description?: string, category?: string) => Promise<{ success: boolean; error?: string; preset?: IFilterPreset }>;
+  savePreset: (name: string, description?: string, category?: string) => Promise<{ success: boolean; error?: string; preset?: IView }>;
   loadPreset: (id: string) => Promise<void>;
   updatePreset: (id: string, updates: { name?: string; description?: string; category?: string; filterConfig?: IFilterConfig }) => Promise<{ success: boolean; error?: string }>;
   deletePreset: (id: string) => Promise<void>;
 }
 
 export const useFilterStore = create<FilterState>((set, get) => ({
+  filtersBySheet: {},
+  activeSheet: null,
   filters: [],
   combinator: 'AND',
   activeFilterHash: null,
-  liveFiltering: true,
-  presets: [],
-  presetsLoading: false,
+  views: [],
+  viewsLoading: false,
+  currentViewId: null,
 
   addFilter: (filter, groupId) => {
     const newFilter: IFilter = { ...filter, id: nanoid() };
+    const state = get();
 
-    if (groupId) {
-      // Add to specific group
+    if (state.activeSheet) {
+      // Per-sheet filters
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      const updatedFilters = groupId
+        ? addFilterToGroup(sheetFilters.filters, groupId, newFilter)
+        : [...sheetFilters.filters, newFilter];
+
       set((state) => ({
-        filters: addFilterToGroup(state.filters, groupId, newFilter),
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updatedFilters,
+          },
+        },
       }));
     } else {
-      // Add to root
+      // Legacy single filters
+      if (groupId) {
+        set((state) => ({
+          filters: addFilterToGroup(state.filters, groupId, newFilter),
+        }));
+      } else {
+        set((state) => ({
+          filters: [...state.filters, newFilter],
+        }));
+      }
+    }
+  },
+
+  updateFilter: (id, updates) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
       set((state) => ({
-        filters: [...state.filters, newFilter],
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updateFilterInTree(sheetFilters.filters, id, updates),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: updateFilterInTree(state.filters, id, updates),
       }));
     }
   },
 
-  updateFilter: (id, updates) =>
-    set((state) => ({
-      filters: updateFilterInTree(state.filters, id, updates),
-    })),
-
-  removeFilter: (id) =>
-    set((state) => ({
-      filters: removeFilterFromTree(state.filters, id),
-    })),
+  removeFilter: (id) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: removeFilterFromTree(sheetFilters.filters, id),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: removeFilterFromTree(state.filters, id),
+      }));
+    }
+  },
 
   addGroup: (combinator, parentGroupId) => {
     const newGroup: IFilterGroup = {
@@ -78,126 +160,278 @@ export const useFilterStore = create<FilterState>((set, get) => ({
       filters: [],
     };
 
-    if (parentGroupId) {
-      // Add to specific parent group
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      const updatedFilters = parentGroupId
+        ? addFilterToGroup(sheetFilters.filters, parentGroupId, newGroup)
+        : [...sheetFilters.filters, newGroup];
+
       set((state) => ({
-        filters: addFilterToGroup(state.filters, parentGroupId, newGroup),
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updatedFilters,
+          },
+        },
       }));
     } else {
-      // Add to root
+      if (parentGroupId) {
+        set((state) => ({
+          filters: addFilterToGroup(state.filters, parentGroupId, newGroup),
+        }));
+      } else {
+        set((state) => ({
+          filters: [...state.filters, newGroup],
+        }));
+      }
+    }
+  },
+
+  updateGroup: (id, combinator) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
       set((state) => ({
-        filters: [...state.filters, newGroup],
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: updateGroupInTree(sheetFilters.filters, id, combinator),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: updateGroupInTree(state.filters, id, combinator),
       }));
     }
   },
 
-  updateGroup: (id, combinator) =>
-    set((state) => ({
-      filters: updateGroupInTree(state.filters, id, combinator),
-    })),
+  removeGroup: (id) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            filters: removeFilterFromTree(sheetFilters.filters, id),
+          },
+        },
+      }));
+    } else {
+      set((state) => ({
+        filters: removeFilterFromTree(state.filters, id),
+      }));
+    }
+  },
 
-  removeGroup: (id) =>
-    set((state) => ({
-      filters: removeFilterFromTree(state.filters, id),
-    })),
+  clearFilters: () => {
+    const state = get();
+    if (state.activeSheet) {
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            filters: [],
+            combinator: 'AND',
+          },
+        },
+        activeFilterHash: null,
+      }));
+    } else {
+      set({
+        filters: [],
+        activeFilterHash: null,
+      });
+    }
+  },
 
-  clearFilters: () =>
+  clearAllFilters: () => {
+    // Clear ALL filters for ALL sheets (used when switching sessions)
     set({
+      filtersBySheet: {},
       filters: [],
+      combinator: 'AND',
       activeFilterHash: null,
-    }),
+    });
+  },
 
-  setCombinator: (combinator) => set({ combinator }),
+  setCombinator: (combinator) => {
+    const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      set((state) => ({
+        filtersBySheet: {
+          ...state.filtersBySheet,
+          [state.activeSheet!]: {
+            ...sheetFilters,
+            combinator,
+          },
+        },
+      }));
+    } else {
+      set({ combinator });
+    }
+  },
 
   setActiveFilterHash: (hash) => set({ activeFilterHash: hash }),
 
-  setLiveFiltering: (enabled) => set({ liveFiltering: enabled }),
+  setActiveSheet: (sheetName) => {
+    set({ activeSheet: sheetName });
+    // Initialize sheet filters if not exists
+    if (sheetName) {
+      const state = get();
+      if (!state.filtersBySheet[sheetName]) {
+        set((state) => ({
+          filtersBySheet: {
+            ...state.filtersBySheet,
+            [sheetName]: {
+              filters: [],
+              combinator: 'AND',
+            },
+          },
+        }));
+      }
+    }
+  },
+
+  restoreFiltersBySheet: (filtersBySheet) => {
+    set({ filtersBySheet });
+  },
 
   getFilterConfig: () => {
     const state = get();
+    if (state.activeSheet) {
+      const sheetFilters = state.filtersBySheet[state.activeSheet] || { filters: [], combinator: 'AND' };
+      return {
+        filters: sheetFilters.filters,
+        combinator: sheetFilters.combinator,
+      };
+    }
     return {
       filters: state.filters,
       combinator: state.combinator,
     };
   },
 
-  // Preset Actions
-  loadPresets: async () => {
-    set({ presetsLoading: true });
+  // View Actions
+  loadViews: async (workspaceId, sessionId) => {
+    set({ viewsLoading: true });
     try {
-      const response = await fetch('/api/filter-presets');
+      const params = new URLSearchParams();
+      if (workspaceId) params.append('workspaceId', workspaceId);
+      if (sessionId) params.append('sessionId', sessionId);
+      // NOTE: sheetName removed - views are GLOBAL to workspace
+
+      const url = params.toString() ? `/api/views?${params.toString()}` : '/api/views';
+      const response = await fetch(url);
       const result = await response.json();
       if (result.success) {
-        set({ presets: result.presets, presetsLoading: false });
+        set({ views: result.views, viewsLoading: false });
       } else {
-        console.error('Failed to load presets:', result.error);
-        set({ presetsLoading: false });
+        console.error('Failed to load views:', result.error);
+        set({ viewsLoading: false });
       }
     } catch (error) {
-      console.error('Error loading presets:', error);
-      set({ presetsLoading: false });
+      console.error('Error loading views:', error);
+      set({ viewsLoading: false });
     }
   },
 
-  savePreset: async (name, description = '', category = 'Custom') => {
+  saveView: async (name, options) => {
     const state = get();
     const filterConfig = state.getFilterConfig();
 
     try {
-      const response = await fetch('/api/filter-presets', {
+      const response = await fetch('/api/views', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name,
-          description,
-          category,
+          description: options.description || '',
+          category: options.category || 'Custom',
           filterConfig,
+          viewType: options.viewType || 'filters_only',
+          snapshotData: options.snapshotData,
+          isPublic: options.isPublic || false,
+          workspaceId: options.workspaceId, // REQUIRED
+          sessionId: options.sessionId, // REQUIRED
+          // NOTE: sheetName removed - views are GLOBAL to workspace
         }),
       });
 
       const result = await response.json();
 
       if (result.success) {
-        // Reload presets to get updated list
-        await get().loadPresets();
-        return { success: true, preset: result.preset };
+        // Reload views to get updated list (GLOBAL views for workspace)
+        await get().loadViews(options.workspaceId, options.sessionId);
+        set({ currentViewId: result.view.id });
+        return {
+          success: true,
+          view: result.view,
+          publicLink: result.publicLink
+        };
       } else {
         return { success: false, error: result.error };
       }
     } catch (error) {
-      console.error('Error saving preset:', error);
-      return { success: false, error: 'Failed to save preset' };
+      console.error('Error saving view:', error);
+      return { success: false, error: 'Failed to save view' };
     }
   },
 
-  loadPreset: async (id) => {
+  loadView: async (id) => {
     try {
-      const response = await fetch(`/api/filter-presets/${id}`);
+      const response = await fetch(`/api/views/${id}`);
       const result = await response.json();
 
       if (result.success) {
-        const config: IFilterConfig = JSON.parse(result.preset.filter_config);
-        set({
-          filters: config.filters,
-          combinator: config.combinator,
-        });
+        // filter_config is already deserialized by the adapter
+        const config: IFilterConfig = result.view.filter_config;
+        const state = get();
+
+        if (state.activeSheet) {
+          // Load view to active sheet
+          set((state) => ({
+            filtersBySheet: {
+              ...state.filtersBySheet,
+              [state.activeSheet!]: {
+                filters: config.filters,
+                combinator: config.combinator,
+              },
+            },
+            currentViewId: id,
+          }));
+        } else {
+          // Legacy single filters
+          set({
+            filters: config.filters,
+            combinator: config.combinator,
+            currentViewId: id,
+          });
+        }
       } else {
-        console.error('Failed to load preset:', result.error);
+        console.error('Failed to load view:', result.error);
       }
     } catch (error) {
-      console.error('Error loading preset:', error);
+      console.error('Error loading view:', error);
     }
   },
 
-  updatePreset: async (id, updates) => {
+  updateView: async (id, updates) => {
     try {
       const body: any = {};
       if (updates.name !== undefined) body.name = updates.name;
       if (updates.description !== undefined) body.description = updates.description;
       if (updates.category !== undefined) body.category = updates.category;
       if (updates.filterConfig !== undefined) body.filterConfig = updates.filterConfig;
+      if (updates.isPublic !== undefined) body.isPublic = updates.isPublic;
 
-      const response = await fetch(`/api/filter-presets/${id}`, {
+      const response = await fetch(`/api/views/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -206,36 +440,85 @@ export const useFilterStore = create<FilterState>((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
-        // Reload presets to get updated list
-        await get().loadPresets();
+        // Reload views to get updated list
+        await get().loadViews();
         return { success: true };
       } else {
         return { success: false, error: result.error };
       }
     } catch (error) {
-      console.error('Error updating preset:', error);
-      return { success: false, error: 'Failed to update preset' };
+      console.error('Error updating view:', error);
+      return { success: false, error: 'Failed to update view' };
     }
   },
 
-  deletePreset: async (id) => {
+  deleteView: async (id) => {
     try {
-      const response = await fetch(`/api/filter-presets/${id}`, {
+      const response = await fetch(`/api/views/${id}`, {
         method: 'DELETE',
       });
 
       const result = await response.json();
 
       if (result.success) {
-        // Reload presets to get updated list
-        await get().loadPresets();
+        // Reload views to get updated list
+        await get().loadViews();
+        // Clear current view if it was the deleted one
+        const state = get();
+        if (state.currentViewId === id) {
+          set({ currentViewId: null });
+        }
       } else {
-        console.error('Failed to delete preset:', result.error);
+        console.error('Failed to delete view:', result.error);
       }
     } catch (error) {
-      console.error('Error deleting preset:', error);
+      console.error('Error deleting view:', error);
     }
   },
+
+  shareView: async (id) => {
+    try {
+      // Get view to check if it's already public
+      const response = await fetch(`/api/views/${id}`);
+      const result = await response.json();
+
+      if (result.success && result.view) {
+        if (result.view.is_public && result.view.public_link_id) {
+          return `/public/view/${result.view.public_link_id}`;
+        } else {
+          // Make view public if not already
+          const updateResponse = await fetch(`/api/views/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ isPublic: true }),
+          });
+
+          const updateResult = await updateResponse.json();
+          if (updateResult.success && updateResult.view.public_link_id) {
+            await get().loadViews();
+            return `/public/view/${updateResult.view.public_link_id}`;
+          }
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('Error sharing view:', error);
+      return null;
+    }
+  },
+
+  // Backward compatibility aliases (DEPRECATED)
+  loadPresets: async () => get().loadViews(),
+  savePreset: async (name, description, category) => {
+    console.warn('savePreset is deprecated and will fail. Use saveView with workspaceId and sessionId instead.');
+    return {
+      success: false,
+      error: 'savePreset is deprecated. Use saveView with required workspaceId and sessionId parameters.',
+    };
+  },
+  loadPreset: async (id) => get().loadView(id),
+  updatePreset: async (id, updates) => get().updateView(id, updates),
+  deletePreset: async (id) => get().deleteView(id),
 }));
 
 // Helper functions

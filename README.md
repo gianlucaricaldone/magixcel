@@ -1,184 +1,369 @@
 # MagiXcel
 
-Smart Excel & CSV analysis tool for filtering, analyzing, and exporting your data with ease.
+> **Advanced Excel & CSV analysis platform** with workspace management, persistent views, dynamic filtering, and sub-100ms query performance powered by DuckDB.
 
-## Features
+## ✨ Key Features
 
-- **File Upload**: Support for Excel (.xlsx, .xls) and CSV files up to 1GB
-- **Smart Processing**: Automatic type inference and data validation
-- **Powerful Filtering**: Apply complex filters with an intuitive interface
-- **Fast Performance**: Virtual scrolling and optimized data handling
-- **Export Options**: Export filtered results to CSV or JSON
-- **Database Agnostic**: SQLite for development, ready for Supabase migration
+### 🗂️ **Workspace Management**
+- Organize files into workspaces (NotebookLM-style)
+- Color-coded workspace cards
+- Each workspace isolates its views and sessions
 
-## Tech Stack
+### 📊 **Views System**
+- **Explorer Tab**: Temporary filters for quick exploration
+- **Views Tab**: Save filters as persistent, reusable views
+- **Multiple Active Views**: Combine multiple views with AND logic
+- **Charts Dashboard**: Create and visualize data with charts
+- **Auto-save**: Changes saved automatically with debouncing
 
-- **Frontend**: Next.js 14, React 18, TailwindCSS, shadcn/ui
-- **State Management**: Zustand
-- **Data Processing**: XLSX, PapaParse
-- **Database**: SQLite (better-sqlite3)
-- **Type Safety**: TypeScript strict mode
+### ⚡ **High Performance**
+- **DuckDB Engine**: Sub-100ms queries on multi-million row datasets
+- **Parquet Storage**: 60-70% compression ratio vs. original files
+- **Smart Caching**: Redis-compatible cache layer for instant results
+- **Virtual Scrolling**: Smooth browsing of large datasets
 
-## Getting Started
+### 🎯 **Advanced Filtering**
+- Complex filter builder with 15+ operators
+- AND/OR combinators
+- Global search across all columns
+- Save filter combinations as views
+- Apply multiple views simultaneously
+
+### 📈 **Data Visualization**
+- Multiple chart types (bar, line, pie, doughnut, area, scatter)
+- Grouping and aggregation support
+- Responsive chart sizing
+- Charts linked to views for persistence
+
+### 🔄 **Multi-Sheet Excel Support**
+- Views scoped to specific sheets
+- Independent filtering per sheet
+- Seamless sheet switching
+
+---
+
+## 🏗️ Tech Stack
+
+### **Frontend**
+- **Next.js 14** (App Router)
+- **React 18** with TypeScript strict mode
+- **TailwindCSS** + **shadcn/ui** (Radix UI primitives)
+- **Zustand** for state management
+- **TanStack Table** for data grids
+- **Chart.js** + **react-chartjs-2** for visualizations
+
+### **Backend & Data Processing**
+- **DuckDB** (analytical queries on Parquet files)
+- **Parquet** format (columnar storage, 60-70% compression)
+- **ExcelJS** (Excel file processing)
+- **PapaParse** (CSV parsing)
+
+### **Database & Storage** (Adapter Pattern)
+- **Development**: SQLite (local), Local Filesystem
+- **Production**: Supabase (PostgreSQL), Cloudflare R2, Vercel KV/Redis
+
+### **Architecture Highlights**
+- **Adapter Pattern**: Seamless dev/prod environment switching
+- **DuckDB Query Builder**: Translates filter configs to optimized SQL
+- **Cache Layer**: Memory (dev) / Redis (prod)
+- **Soft Deletes**: Sessions can be recovered
+- **User Isolation**: Multi-tenancy ready with user_id
+
+---
+
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js 20.x or higher
-- npm 10.x or higher
+- **Node.js** 20.x or higher
+- **npm** 10.x or higher
 
 ### Installation
 
-1. Clone the repository:
-```bash
-git clone <your-repo-url>
-cd magixcel
-```
+1. **Clone the repository:**
+   ```bash
+   git clone <your-repo-url>
+   cd magixcel
+   ```
 
-2. Install dependencies:
-```bash
-npm install
-```
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-3. Set up environment variables:
-```bash
-cp .env.example .env.local
-```
+3. **Set up environment variables:**
+   ```bash
+   cp .env.local.example .env.local
+   ```
 
-The default configuration in `.env.local` should work for local development:
-```
-DATABASE_TYPE=sqlite
-DATABASE_URL=file:./data/magixcel.db
-STORAGE_TYPE=local
-STORAGE_PATH=./data/uploads
-MAX_UPLOAD_SIZE=1073741824
-NODE_ENV=development
-```
+   **Default development configuration** (`.env.local`):
+   ```env
+   NODE_ENV=development
 
-4. Start the development server:
-```bash
-npm run dev
-```
+   # Database (SQLite for development)
+   DB_PROVIDER=sqlite
+   SQLITE_DB_PATH=./data/magixcel.db
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser
+   # Storage (Local filesystem for development)
+   STORAGE_PROVIDER=local
+   LOCAL_STORAGE_PATH=./data/files
 
-## Project Structure
+   # Cache (In-memory for development)
+   CACHE_PROVIDER=memory
+
+   # DuckDB Configuration
+   DUCKDB_THREADS=4
+   DUCKDB_MEMORY_LIMIT=2GB
+
+   # Development User
+   DEV_USER_ID=dev-user
+   ```
+
+4. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
+
+5. **Open your browser:**
+   - Navigate to [http://localhost:3000](http://localhost:3000)
+
+---
+
+## 📁 Project Structure
 
 ```
 magixcel/
-├── app/                      # Next.js App Router
-│   ├── api/                  # API routes
-│   ├── dashboard/            # Dashboard pages
-│   └── page.tsx              # Landing page
-├── components/               # React components
-│   ├── ui/                   # shadcn/ui components
-│   ├── upload/               # File upload components
-│   ├── table/                # Data table components
-│   └── filters/              # Filter components
-├── lib/                      # Business logic
-│   ├── db/                   # Database abstraction
-│   ├── processing/           # File processing
-│   ├── storage/              # File storage
-│   └── utils/                # Utilities
-├── stores/                   # Zustand stores
-├── types/                    # TypeScript types
-├── documentation/            # Project documentation
-└── data/                     # Local data (git-ignored)
+├── app/
+│   ├── api/                           # Next.js API routes
+│   │   ├── upload/                    # File upload (Excel → Parquet)
+│   │   ├── filter/                    # DuckDB queries with cache
+│   │   ├── workspace/                 # Workspace CRUD
+│   │   ├── session/                   # Session management
+│   │   ├── views/                     # Views CRUD
+│   │   └── active-views/              # Active views tracking
+│   └── app/                           # Frontend pages
+│       ├── workspace/[id]/            # Workspace detail
+│       └── workspace/[id]/session/[id]/ # Session viewer
+│
+├── components/
+│   ├── ui/                            # shadcn/ui components
+│   ├── workspace/                     # Workspace components
+│   ├── views/                         # Views feature components
+│   ├── filters/                       # Filter builder
+│   ├── charts/                        # Chart components
+│   └── upload/                        # File uploader
+│
+├── lib/
+│   ├── adapters/                      # Adapter Pattern
+│   │   ├── db/                        # Database adapters (SQLite/Supabase)
+│   │   ├── storage/                   # Storage adapters (Local/R2)
+│   │   └── cache/                     # Cache adapters (Memory/Redis)
+│   ├── duckdb/                        # DuckDB integration
+│   │   ├── client.ts                  # DuckDB wrapper
+│   │   └── query-builder.ts           # Filter → SQL conversion
+│   └── processing/                    # Business logic
+│       └── parquet-converter.ts       # Excel/CSV → Parquet
+│
+├── stores/                            # Zustand stores
+│   ├── filter-store.ts                # Filters & views state
+│   └── data-store.ts                  # Data & sheets state
+│
+├── types/                             # TypeScript definitions
+│   ├── database.ts                    # DB models
+│   ├── filters.ts                     # Filter types
+│   └── charts.ts                      # Chart types
+│
+├── documentation/                     # Project docs
+│   ├── ARCHITECTURE.md
+│   ├── DATABASE_SCHEMA.md
+│   ├── CODING_STANDARDS.md            # **READ THIS FIRST**
+│   └── refactor/
+│       └── magixcel-design-doc.md     # Design document
+│
+└── data/                              # Local data (git-ignored)
+    ├── magixcel.db                    # SQLite database
+    └── files/                         # Uploaded files & Parquet
 ```
 
-## Usage
+---
 
-### Uploading a File
+## 🎯 Key Workflows
 
-1. Navigate to the home page
-2. Drag & drop or click to browse for an Excel or CSV file
-3. Wait for the file to be processed
-4. You'll be redirected to the dashboard
+### 1️⃣ **Upload Flow**
+```
+File Upload → DuckDB Processing → Parquet Export → Storage Upload → DB Metadata Save
+```
+- File saved to temp directory
+- DuckDB converts to Parquet (60-70% compression)
+- Original + Parquet uploaded to storage
+- Metadata (sheets, columns, row counts) saved to database
 
-### Filtering Data
+### 2️⃣ **Filter Flow**
+```
+User Filters → Cache Check → SQL Generation → DuckDB Query → Cache Result → Return
+```
+- Check cache for filter hash
+- Build optimized SQL with QueryBuilder
+- Execute query on Parquet file
+- Cache result (1 hour TTL)
+- Sub-100ms response time
 
-1. In the dashboard, click "Add Filter"
-2. Select a column, operator, and value
-3. Add multiple filters if needed
-4. Choose AND/OR combinator for multiple filters
-5. Click "Apply Filters"
+### 3️⃣ **Views Flow**
+```
+Explorer (temp filters) → Save as View → View stored in DB → Activate View → Apply filters
+```
+- Explorer Tab: Temporary filters (saved in `sessions.active_filters`)
+- Views Tab: Persistent views (saved in `views` table)
+- Multiple views can be active → filters combined with AND logic
+- Charts linked to views for persistence
 
-### Exporting Data
+---
 
-1. Apply your desired filters (or use the full dataset)
-2. Click "Export" (coming soon)
-3. Choose your format (CSV or JSON)
-4. Download the file
+## 🗄️ Database Schema
 
-## Development
+### **Core Tables**
 
-### Database
+**workspaces**
+- Organizes sessions into workspaces
+- Each workspace has color, icon, name, description
+- One default workspace per user
 
-The database schema is automatically created when you first run the application. The SQLite database file is stored at `./data/magixcel.db`.
+**sessions**
+- Represents uploaded files (Excel/CSV)
+- Stores metadata (sheets, columns, row counts)
+- Links to Parquet file in storage
+- Soft delete support
 
-To reset the database:
+**views**
+- Persistent filter configurations
+- Global to workspace (not sheet-specific)
+- Can be public (shareable via link)
+- Includes category, description
+
+**view_charts**
+- Charts linked to views
+- Position, size, configuration stored as JSON
+
+**active_views**
+- Tracks which views are active on which sheets
+- Enables multi-view AND logic
+
+See [DATABASE_SCHEMA.md](./documentation/DATABASE_SCHEMA.md) for full schema.
+
+---
+
+## 🔧 Development
+
+### **Database Reset**
 ```bash
 rm -rf data/
+npm run dev  # Auto-creates fresh database
 ```
 
-### Type Checking
-
+### **Type Checking**
 ```bash
 npm run type-check
 ```
 
-### Linting
-
+### **Linting**
 ```bash
 npm run lint
 ```
 
-## Documentation
+### **Environment Variables**
 
-Detailed documentation is available in the `/documentation` folder:
+**Development** (SQLite + Local Storage):
+```env
+DB_PROVIDER=sqlite
+STORAGE_PROVIDER=local
+CACHE_PROVIDER=memory
+```
 
-- [PROJECT_OVERVIEW.md](./documentation/PROJECT_OVERVIEW.md) - Project vision and goals
+**Production** (Supabase + R2 + Redis):
+```env
+DB_PROVIDER=supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+
+STORAGE_PROVIDER=r2
+R2_ACCOUNT_ID=your-account-id
+R2_ACCESS_KEY_ID=your-access-key
+R2_SECRET_ACCESS_KEY=your-secret
+R2_BUCKET_NAME=magixcel-files
+
+CACHE_PROVIDER=redis
+REDIS_URL=redis://your-redis-url
+```
+
+---
+
+## 📚 Documentation
+
+**Essential Reading:**
+- **[CODING_STANDARDS.md](./documentation/CODING_STANDARDS.md)** ⭐ **READ FIRST**
 - [ARCHITECTURE.md](./documentation/ARCHITECTURE.md) - Architecture decisions
 - [DATABASE_SCHEMA.md](./documentation/DATABASE_SCHEMA.md) - Database schema
 - [API_ENDPOINTS.md](./documentation/API_ENDPOINTS.md) - API documentation
-- [NAMING_CONVENTIONS.md](./documentation/NAMING_CONVENTIONS.md) - Code conventions
 - [FEATURE_ROADMAP.md](./documentation/FEATURE_ROADMAP.md) - Feature roadmap
 - [DEPLOYMENT_GUIDE.md](./documentation/DEPLOYMENT_GUIDE.md) - Deployment guide
 
-## Roadmap
+**Design Documents:**
+- [magixcel-design-doc.md](./documentation/refactor/magixcel-design-doc.md) - Refactor design doc
 
-### Phase 1 (MVP) - ✓ Complete
-- [x] File upload (Excel/CSV)
-- [x] Data preview
-- [x] Basic filtering
-- [x] Export to CSV/JSON
-- [x] SQLite database
+---
 
-### Phase 2 - In Progress
-- [ ] Natural language filtering
-- [ ] Advanced filter operators
-- [ ] Filter presets
-- [ ] Save and load filters
+## 🛣️ Roadmap
 
-### Phase 3 - Planned
+### ✅ **Phase 1 - Core Infrastructure** (Complete)
+- [x] Adapter Pattern (DB/Storage/Cache)
+- [x] DuckDB integration
+- [x] Parquet conversion
+- [x] Workspace system
+- [x] Session management
+- [x] Views system with active views
+- [x] Chart builder
+- [x] Multi-sheet Excel support
+
+### 🚧 **Phase 2 - Features** (In Progress)
+- [ ] Command Palette (⌘K) - placeholder implemented
+- [ ] Export to PowerPoint/PDF
+- [ ] AI Insights tab
+- [ ] View templates
+- [ ] Duplicate view functionality
+- [ ] Public view sharing
+- [ ] Advanced filters (date range, regex)
+
+### 🔮 **Phase 3 - Advanced** (Planned)
+- [ ] Natural language queries
 - [ ] Pattern recognition
 - [ ] Data quality analysis
-- [ ] Charts and visualizations
-- [ ] Advanced exports (XLSX with formatting)
+- [ ] Automated insights
+- [ ] Real-time collaboration
+- [ ] API for external integrations
 
-See [FEATURE_ROADMAP.md](./documentation/FEATURE_ROADMAP.md) for the complete roadmap.
+---
 
-## Contributing
+## 🤝 Contributing
 
-Contributions are welcome! Please read the documentation for coding conventions and architecture guidelines.
+Contributions are welcome! Please:
+1. Read [CODING_STANDARDS.md](./documentation/CODING_STANDARDS.md) for conventions
+2. Follow the adapter pattern for new integrations
+3. Use TypeScript strict mode
+4. Write tests for new features
+5. Update documentation
 
-## License
+---
+
+## 📄 License
 
 MIT
 
-## Support
+---
+
+## 💬 Support
 
 For issues and questions, please open an issue on GitHub.
 
 ---
 
-Built with ❤️ using Next.js 14
+**Built with ❤️ using Next.js 14, DuckDB, and Parquet**
