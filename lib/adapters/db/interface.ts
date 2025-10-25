@@ -97,7 +97,10 @@ export type FilterOperator =
   | 'greaterThanOrEqual' | 'lessThanOrEqual'
   | 'between' | 'in' | 'notIn'
   | 'isNull' | 'isNotNull'
-  | 'startsWith' | 'endsWith';
+  | 'startsWith' | 'endsWith'
+  | 'regex';
+
+export type FilterCombinator = 'AND' | 'OR';
 
 export interface IFilterPreset {
   id: string;
@@ -112,9 +115,17 @@ export interface IFilterPreset {
   updated_at: string;
 }
 
+// Filter group for nested conditions
+export interface IFilterGroup {
+  id: string;
+  type: 'group';
+  combinator: FilterCombinator;
+  filters: (IFilter | IFilterGroup)[];
+}
+
 export interface IFilterConfig {
-  filters: IFilter[];
-  combinator: 'AND' | 'OR';
+  filters: (IFilter | IFilterGroup)[];
+  combinator: FilterCombinator;
 }
 
 export interface IView {

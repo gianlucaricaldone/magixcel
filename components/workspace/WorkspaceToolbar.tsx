@@ -17,12 +17,14 @@ import {
   Share2,
   Settings,
   ChevronDown,
+  FileEdit,
 } from 'lucide-react';
 
 interface WorkspaceToolbarProps {
   onCreateView: () => void;
   onAddView: () => void;
   onExport?: () => void;
+  onReplaceFile?: () => void;
   onSave?: () => void;
   onSaveAsNew?: () => void;
   onShare?: () => void;
@@ -33,6 +35,7 @@ export function WorkspaceToolbar({
   onCreateView,
   onAddView,
   onExport,
+  onReplaceFile,
   onSave,
   onSaveAsNew,
   onShare,
@@ -47,6 +50,11 @@ export function WorkspaceToolbar({
           <ChevronDown className="h-3 w-3 opacity-50" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
+          <DropdownMenuItem onClick={onReplaceFile}>
+            <FileEdit className="h-4 w-4 mr-2" />
+            Modifica File Input
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={onExport}>
             <FileDown className="h-4 w-4 mr-2" />
             Export

@@ -51,7 +51,7 @@ export function AggregatedViewCharts({
         const result = await response.json();
 
         if (result.success && result.views) {
-          const allDataView = result.views.find((v: IView) => v.is_default === 1);
+          const allDataView = result.views.find((v: IView) => v.is_default === true);
           setDefaultView(allDataView || null);
         }
       } catch (error) {

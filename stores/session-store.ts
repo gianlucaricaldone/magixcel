@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { IFileMetadata } from '@/types';
+import { ISessionMetadata } from '@/types';
 
 /**
  * Session state management
@@ -7,12 +7,12 @@ import { IFileMetadata } from '@/types';
 
 interface SessionState {
   sessionId: string | null;
-  metadata: IFileMetadata | null;
+  metadata: ISessionMetadata | null;
   isLoading: boolean;
   error: string | null;
 
   // Actions
-  setSession: (sessionId: string, metadata: IFileMetadata) => void;
+  setSession: (sessionId: string, metadata: ISessionMetadata) => void;
   clearSession: () => void;
   setLoading: (isLoading: boolean) => void;
   setError: (error: string | null) => void;

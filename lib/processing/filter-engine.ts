@@ -156,9 +156,10 @@ export function validateFilterConfig(config: IFilterConfig): { valid: boolean; e
   for (const item of config.filters) {
     if ('type' in item && item.type === 'group') {
       // Validate group recursively
+      const group = item as unknown as IFilterGroup;
       const groupValid = validateFilterConfig({
-        filters: item.filters,
-        combinator: item.combinator,
+        filters: group.filters,
+        combinator: group.combinator,
       });
       if (!groupValid.valid) return groupValid;
     } else {

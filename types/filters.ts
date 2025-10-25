@@ -1,49 +1,20 @@
 /**
  * Filter type definitions
+ *
+ * @deprecated Most filter types are now defined in lib/adapters/db/interface.ts
+ * This file only contains IColumnType which is not part of the database schema
  */
 
-export type FilterOperator =
-  | 'equals'
-  | 'notEquals'
-  | 'contains'
-  | 'notContains'
-  | 'startsWith'
-  | 'endsWith'
-  | 'greaterThan'
-  | 'greaterThanOrEqual'
-  | 'lessThan'
-  | 'lessThanOrEqual'
-  | 'between'
-  | 'in'
-  | 'notIn'
-  | 'isNull'
-  | 'isNotNull'
-  | 'regex';
+// Re-export filter types from database layer for backward compatibility
+export type {
+  FilterOperator,
+  FilterCombinator,
+  IFilter,
+  IFilterGroup,
+  IFilterConfig,
+} from './database';
 
-export type FilterCombinator = 'AND' | 'OR';
-
-export interface IFilter {
-  id: string;
-  column: string;
-  operator: FilterOperator;
-  value: any;
-  value2?: any; // For 'between' operator
-}
-
-// Filter group for nested conditions
-export interface IFilterGroup {
-  id: string;
-  type: 'group';
-  combinator: FilterCombinator;
-  filters: (IFilter | IFilterGroup)[];
-}
-
-// Top level filter configuration
-export interface IFilterConfig {
-  filters: (IFilter | IFilterGroup)[];
-  combinator: FilterCombinator;
-}
-
+// Column type inference (not part of database schema)
 export interface IColumnType {
   name: string;
   type: 'string' | 'number' | 'date' | 'boolean' | 'unknown';

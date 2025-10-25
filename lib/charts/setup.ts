@@ -79,7 +79,7 @@ export const defaultChartOptions: ChartOptions<any> = {
       cornerRadius: 6,
       displayColors: true,
       callbacks: {
-        label: function(context) {
+        label: function(context: any) {
           let label = context.dataset.label || '';
           if (label) {
             label += ': ';

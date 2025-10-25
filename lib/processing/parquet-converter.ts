@@ -143,7 +143,7 @@ export class ParquetConverter {
 
       // Extract all data rows
       const rows: any[][] = [];
-      worksheet.eachRow((row, rowNumber) => {
+      worksheet.eachRow((row: any, rowNumber: number) => {
         if (rowNumber === 1) return; // Skip header
 
         const values = row.values as any[];

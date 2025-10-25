@@ -5,8 +5,8 @@
  * All types are now defined in lib/adapters/db/interface.ts
  */
 
-// Export all types from adapter interface
-export type {
+// Import types for use in this file
+import type {
   IDBAdapter,
   IWorkspace,
   ISession,
@@ -15,7 +15,9 @@ export type {
   IColumnMetadata,
   IActiveFiltersState,
   IFilter,
+  IFilterGroup,
   FilterOperator,
+  FilterCombinator,
   IFilterPreset,
   IFilterConfig,
   IView,
@@ -25,6 +27,29 @@ export type {
   IExport,
   IActiveView,
 } from '../lib/adapters/db/interface';
+
+// Re-export all types from adapter interface
+export type {
+  IDBAdapter,
+  IWorkspace,
+  ISession,
+  ISessionMetadata,
+  ISheetMetadata,
+  IColumnMetadata,
+  IActiveFiltersState,
+  IFilter,
+  IFilterGroup,
+  FilterOperator,
+  FilterCombinator,
+  IFilterPreset,
+  IFilterConfig,
+  IView,
+  IViewChart,
+  IReport,
+  IReportConfig,
+  IExport,
+  IActiveView,
+};
 
 // Legacy types - kept for backward compatibility
 // These will be gradually phased out

@@ -28,6 +28,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { applyFilters } from '@/lib/processing/filter-engine';
 import { IView } from '@/types/database';
+import { ReplaceFileDialog } from '@/components/session/ReplaceFileDialog';
 
 export default function SessionPage() {
   const params = useParams();
@@ -56,6 +57,9 @@ export default function SessionPage() {
   // Auto-save status indicator
   const [isSavingViews, setIsSavingViews] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
+  // Replace file dialog
+  const [isReplaceFileDialogOpen, setIsReplaceFileDialogOpen] = useState(false);
 
   // Columns from data
   const columns = useMemo(() => {
@@ -318,6 +322,15 @@ export default function SessionPage() {
     }
   };
 
+  const handleReplaceFile = () => {
+    setIsReplaceFileDialogOpen(true);
+  };
+
+  const handleReplaceComplete = () => {
+    // Reload the page to get new data
+    window.location.reload();
+  };
+
   if (isLoadingSession) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -355,6 +368,7 @@ export default function SessionPage() {
           onCreateView={handleCreateView}
           onAddView={() => setIsViewPickerOpen(true)}
           onExport={() => console.log('Export clicked - TODO: implement')}
+          onReplaceFile={handleReplaceFile}
           onSave={() => console.log('Save clicked - TODO: implement')}
           onSaveAsNew={() => console.log('Save as new clicked - TODO: implement')}
           onShare={() => console.log('Share clicked - TODO: implement')}
@@ -464,6 +478,17 @@ export default function SessionPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Replace File Dialog */}
+      <ReplaceFileDialog
+        isOpen={isReplaceFileDialogOpen}
+        onClose={() => setIsReplaceFileDialogOpen(false)}
+        sessionId={sessionId}
+        currentMetadata={{
+          columns: metadata?.sheets?.[0]?.columns || [],
+        }}
+        onReplaceComplete={handleReplaceComplete}
+      />
     </div>
   );
 }
