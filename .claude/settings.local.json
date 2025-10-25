@@ -56,7 +56,8 @@
       "Bash(node:*)",
       "Bash(curl:*)",
       "Bash(awk:*)",
-      "Bash(lsof:*)"
+      "Bash(lsof:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []
