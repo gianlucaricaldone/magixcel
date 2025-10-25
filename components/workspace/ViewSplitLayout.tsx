@@ -8,7 +8,7 @@ import { ChartDisplay } from '@/components/charts/ChartDisplay';
 import { ChartBuilder } from '@/components/charts/ChartBuilder';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, BarChart3, Loader2, Sparkles, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { Plus, BarChart3, Loader2, ChevronRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -24,13 +24,6 @@ interface ViewSplitLayoutProps {
 }
 
 export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
-  console.log('[ViewSplitLayout] Rendering with:', {
-    viewName: view.name,
-    dataLength: data.length,
-    columnsLength: columns.length,
-    firstRow: data[0],
-  });
-
   const [charts, setCharts] = useState<ViewChart[]>([]);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
@@ -41,12 +34,6 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
   const [chartsPanelWidth, setChartsPanelWidth] = useState(400); // Default width in pixels
   const [isResizing, setIsResizing] = useState(false);
   const resizeRef = useRef<HTMLDivElement>(null);
-
-  // Table zoom state
-  const [zoomLevel, setZoomLevel] = useState(100); // 100 = 100%
-  const MIN_ZOOM = 50;
-  const MAX_ZOOM = 200;
-  const ZOOM_STEP = 10;
 
   // Load charts for this view
   useEffect(() => {
@@ -183,7 +170,7 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
           }}
         >
         {/* Header with View Name */}
-        <div className="px-4 py-3 border-b bg-white flex-shrink-0">
+        <div className="px-4 py-4 border-b bg-white flex-shrink-0">
           <h3 className="font-semibold text-slate-900">{view.name}</h3>
         </div>
 
@@ -195,7 +182,6 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
         </div>
 
         {/* Table - SAME structure as "All Data" */}
-        {console.log('[ViewSplitLayout] Rendering DataTable with:', { dataLength: data.length, columnsLength: columns.length })}
         <DataTable columns={columns} data={data} />
       </div>
 
@@ -250,16 +236,10 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
                     {charts.length}
                   </Badge>
                 </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => setIsChartBuilderOpen(true)} size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Chart
-                  </Button>
-                  <Button variant="outline" size="sm" disabled>
-                    <Sparkles className="h-4 w-4 mr-2" />
-                    Magic Charts
-                  </Button>
-                </div>
+                <Button onClick={() => setIsChartBuilderOpen(true)} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Chart
+                </Button>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4">

@@ -62,13 +62,6 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
   // Use prop data if provided, otherwise use store data
   const filteredData = propData !== undefined ? propData : storeData;
 
-  console.log('[DataTable] Rendering with:', {
-    propData: propData ? `${propData.length} rows` : 'undefined',
-    storeData: `${storeData.length} rows`,
-    filteredData: `${filteredData.length} rows`,
-    columns: columns.length,
-  });
-
   const parentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const [isMounted, setIsMounted] = useState(false);
@@ -138,25 +131,6 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
   }
 
   const virtualItems = rowVirtualizer.getVirtualItems();
-
-  // Debug logs
-  console.log('[DataTable] Debug:', {
-    isMounted,
-    'filteredData.length': filteredData.length,
-    'virtualItems.length': virtualItems.length,
-    'parentHeight': parentRef.current?.clientHeight,
-  });
-
-  // Debug: Check first row data types
-  if (filteredData.length > 0) {
-    const firstRow = filteredData[0];
-    console.log('[DataTable] First row sample:', {
-      Price: firstRow['Price'],
-      Date: firstRow['Date'],
-      'Price type': typeof firstRow['Price'],
-      'Date type': typeof firstRow['Date'],
-    });
-  }
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">

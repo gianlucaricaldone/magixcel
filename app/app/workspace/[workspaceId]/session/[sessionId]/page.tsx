@@ -341,6 +341,11 @@ export default function SessionPage() {
       <WorkspaceToolbar
         onCreateView={handleCreateView}
         onAddView={() => setIsViewPickerOpen(true)}
+        onExport={() => console.log('Export clicked - TODO: implement')}
+        onSave={() => console.log('Save clicked - TODO: implement')}
+        onSaveAsNew={() => console.log('Save as new clicked - TODO: implement')}
+        onShare={() => console.log('Share clicked - TODO: implement')}
+        onSettings={() => console.log('Settings clicked - TODO: implement')}
       />
 
       {/* Main Content Area */}
