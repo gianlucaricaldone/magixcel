@@ -92,6 +92,79 @@ export async function POST(request: NextRequest) {
 }
 
 /**
+ * PUT /api/active-views
+ * Sync active views for a session/sheet (bulk operation)
+ * Replaces all active views with the provided list
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    const db = getDBAdapter();
+    const body = await request.json();
+    const { sessionId, sheetName, viewIds } = body;
+
+    // Validation
+    if (!sessionId || typeof sessionId !== 'string') {
+      return NextResponse.json(
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'sessionId is required' } },
+        { status: 400 }
+      );
+    }
+
+    if (!Array.isArray(viewIds)) {
+      return NextResponse.json(
+        { success: false, error: { code: ERROR_CODES.VALIDATION_ERROR, message: 'viewIds must be an array' } },
+        { status: 400 }
+      );
+    }
+
+    const normalizedSheetName = sheetName || null;
+
+    // Get current active views
+    const currentActiveViews = await db.listActiveViews(sessionId, normalizedSheetName);
+    const currentViewIds = currentActiveViews.map(av => av.view_id);
+
+    // Calculate diff
+    const toAdd = viewIds.filter(id => !currentViewIds.includes(id));
+    const toRemove = currentViewIds.filter(id => !viewIds.includes(id));
+
+    // Remove deactivated views
+    for (const viewId of toRemove) {
+      await db.deactivateView(sessionId, normalizedSheetName, viewId);
+    }
+
+    // Add new views
+    for (const viewId of toAdd) {
+      await db.activateView(sessionId, normalizedSheetName, viewId);
+    }
+
+    // Return updated list
+    const updatedActiveViews = await db.listActiveViews(sessionId, normalizedSheetName);
+
+    return NextResponse.json({
+      success: true,
+      activeViews: updatedActiveViews,
+      stats: {
+        added: toAdd.length,
+        removed: toRemove.length,
+        total: updatedActiveViews.length,
+      },
+    });
+  } catch (error: unknown) {
+    console.error('Error syncing active views:', error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: ERROR_CODES.DATABASE_ERROR,
+          message: error instanceof Error ? error.message : 'Failed to sync active views',
+        },
+      },
+      { status: 500 }
+    );
+  }
+}
+
+/**
  * DELETE /api/active-views
  * Deactivate a view from a specific sheet
  */

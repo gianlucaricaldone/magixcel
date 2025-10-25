@@ -84,13 +84,13 @@ function matchFilter(row: any, filter: IFilter): boolean {
     case 'greaterThan':
       return Number(value) > Number(filterValue);
 
-    case 'greaterThanOrEquals':
+    case 'greaterThanOrEqual':
       return Number(value) >= Number(filterValue);
 
     case 'lessThan':
       return Number(value) < Number(filterValue);
 
-    case 'lessThanOrEquals':
+    case 'lessThanOrEqual':
       return Number(value) <= Number(filterValue);
 
     case 'between':

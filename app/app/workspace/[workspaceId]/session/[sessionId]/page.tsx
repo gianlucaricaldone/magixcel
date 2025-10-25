@@ -53,6 +53,10 @@ export default function SessionPage() {
   const [viewDescription, setViewDescription] = useState('');
   const [viewCategory, setViewCategory] = useState('Custom');
 
+  // Auto-save status indicator
+  const [isSavingViews, setIsSavingViews] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+
   // Columns from data
   const columns = useMemo(() => {
     return data.length > 0 ? Object.keys(data[0]) : [];
@@ -127,97 +131,84 @@ export default function SessionPage() {
     }
   }, [workspaceId, sessionId, loadViews]);
 
-  // Restore open views from database or auto-open "All Data" view
+  // Restore open views from database
   useEffect(() => {
     const restoreViewsFromDB = async () => {
       if (views.length > 0 && openViews.length === 0) {
         try {
-          // TODO: Migrate to active_views table
-          // Fetch views state from database
-          // const response = await fetch(`/api/session/${sessionId}/views-state`);
-          // const result = await response.json();
-          const result = { success: false }; // Temporary: views-state endpoint removed
+          // Fetch active views from database
+          const response = await fetch(
+            `/api/active-views?sessionId=${sessionId}&sheetName=${activeSheet || ''}`
+          );
+          const result = await response.json();
 
-          if (result.success && result.viewsState) {
-            const { openViewIds, activeViewId: savedActiveViewId } = result.viewsState;
+          if (result.success && result.activeViews && result.activeViews.length > 0) {
+            // Get view IDs from active_views
+            const activeViewIds = result.activeViews.map((av: any) => av.view_id);
 
-            if (openViewIds && openViewIds.length > 0) {
-              // Match saved IDs with loaded views
-              const restoredViews = openViewIds
-                .map((id: string) => views.find((v) => v.id === id))
-                .filter((v): v is IView => v !== undefined);
+            // Match with loaded views
+            const restoredViews = activeViewIds
+              .map((id: string) => views.find((v: IView) => v.id === id))
+              .filter((v: IView | undefined): v is IView => v !== undefined);
 
-              if (restoredViews.length > 0) {
-                setOpenViews(restoredViews);
-                // Restore active view if it's in the restored views
-                if (savedActiveViewId && restoredViews.some((v) => v.id === savedActiveViewId)) {
-                  setActiveViewId(savedActiveViewId);
-                } else {
-                  // Default to first restored view
-                  setActiveViewId(restoredViews[0].id);
-                }
-                return;
-              }
+            if (restoredViews.length > 0) {
+              console.log('[Auto-restore] Restored', restoredViews.length, 'views from database');
+              setOpenViews(restoredViews);
+              // Set first view as active
+              setActiveViewId(restoredViews[0].id);
             }
+          } else {
+            console.log('[Auto-restore] No active views found in database');
           }
         } catch (error) {
-          console.error('Error restoring views from database:', error);
+          console.error('[Auto-restore] Error restoring views from database:', error);
         }
-
-        // No fallback needed - "All Data" tab is always visible
       }
     };
 
     restoreViewsFromDB();
-  }, [views, sessionId]);
+  }, [views, sessionId, activeSheet]);
 
-  // Persist open views to database
+  // Auto-save open views to database
   useEffect(() => {
     const saveViewsToDB = async () => {
-      if (openViews.length > 0) {
+      // Skip auto-save during initial load (when views haven't been restored yet)
+      if (views.length === 0) return;
+
+      setIsSavingViews(true);
+
+      try {
         const viewIds = openViews.map((v) => v.id);
-        try {
-          // TODO: Migrate to active_views table
-          /*
-          await fetch(`/api/session/${sessionId}/views-state`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              openViewIds: viewIds,
-              activeViewId: activeViewId,
-            }),
-          });
-          */
-        } catch (error) {
-          console.error('Error saving views state to database:', error);
-        }
-      } else {
-        // Clear state when no views are open
-        try {
-          // TODO: Migrate to active_views table
-          /*
-          await fetch(`/api/session/${sessionId}/views-state`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              openViewIds: [],
-              activeViewId: null,
-            }),
-          });
-          */
-        } catch (error) {
-          console.error('Error clearing views state in database:', error);
-        }
+
+        console.log('[Auto-save] Syncing', viewIds.length, 'views to database');
+
+        // Sync active views via PUT endpoint
+        await fetch('/api/active-views', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId,
+            sheetName: activeSheet,
+            viewIds,
+          }),
+        });
+
+        setLastSavedAt(new Date());
+        console.log('[Auto-save] Successfully saved views state');
+      } catch (error) {
+        console.error('[Auto-save] Error saving views state to database:', error);
+      } finally {
+        setIsSavingViews(false);
       }
     };
 
-    // Debounce save to avoid too many DB writes
+    // Debounce save to avoid too many DB writes (500ms)
     const timeoutId = setTimeout(() => {
       saveViewsToDB();
     }, 500);
 
     return () => clearTimeout(timeoutId);
-  }, [openViews, activeViewId, sessionId]);
+  }, [openViews, sessionId, activeSheet, views]);
 
   // Get active view
   const activeView = useMemo(() => {
@@ -354,11 +345,7 @@ export default function SessionPage() {
       {/* Sheet Tabs (for Excel files) */}
       {sheets && sheets.length > 1 && (
         <div className="flex-shrink-0">
-          <SheetTabs
-            sheets={sheets}
-            activeSheet={activeSheet}
-            onSheetChange={setDataActiveSheet}
-          />
+          <SheetTabs />
         </div>
       )}
 
@@ -404,6 +391,8 @@ export default function SessionPage() {
         <StatusBar
           filteredCount={filteredData.length}
           totalCount={data.length}
+          isSaving={isSavingViews}
+          lastSavedAt={lastSavedAt}
         />
       </div>
 

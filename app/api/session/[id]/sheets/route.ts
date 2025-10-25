@@ -11,6 +11,34 @@ import { createDuckDBClient } from '@/lib/duckdb/client';
 import { LocalStorageAdapter } from '@/lib/adapters/storage/local';
 import { ERROR_CODES } from '@/lib/utils/constants';
 import { ISheetData } from '@/lib/processing/excel-processor';
+import { IColumnMetadata } from '@/lib/adapters/db/interface';
+import { IColumnType } from '@/types/filters';
+
+/**
+ * Convert IColumnMetadata to IColumnType
+ */
+function mapColumnMetadataToColumnType(columns: IColumnMetadata[]): IColumnType[] {
+  return columns.map(col => {
+    // Map DuckDB types to simplified types
+    let type: IColumnType['type'] = 'unknown';
+    const lowerType = col.type.toLowerCase();
+
+    if (lowerType.includes('int') || lowerType.includes('numeric') || lowerType.includes('decimal') || lowerType.includes('double') || lowerType.includes('float')) {
+      type = 'number';
+    } else if (lowerType.includes('varchar') || lowerType.includes('text') || lowerType.includes('char')) {
+      type = 'string';
+    } else if (lowerType.includes('date') || lowerType.includes('time')) {
+      type = 'date';
+    } else if (lowerType.includes('bool')) {
+      type = 'boolean';
+    }
+
+    return {
+      name: col.name,
+      type,
+    };
+  });
+}
 
 /**
  * Convert BigInt and DuckDB special types to JSON-serializable values
@@ -156,7 +184,7 @@ export async function GET(
         columns: columnNames,
         rowCount: sheetMeta.rowCount || result.rowCount,
         columnCount: sheetMeta.columnCount || result.columns.length,
-        columnTypes: sheetMeta.columns || [],
+        columnTypes: sheetMeta.columns ? mapColumnMetadataToColumnType(sheetMeta.columns) : [],
       });
 
       console.log(`[Sheets API] Loaded sheet "${sheetName}": ${result.rowCount} rows`);

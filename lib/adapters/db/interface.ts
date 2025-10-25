@@ -144,7 +144,7 @@ export interface IViewChart {
   title: string;
   chart_type: string;
   config: any; // JSON chart configuration
-  size: 'small' | 'medium' | 'large';
+  size: 'small' | 'medium' | 'large' | 'full';
   position: number;
   created_at: string;
   updated_at: string;

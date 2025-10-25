@@ -57,7 +57,8 @@
       "Bash(curl:*)",
       "Bash(awk:*)",
       "Bash(lsof:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(xargs kill:*)"
     ],
     "deny": [],
     "ask": []
