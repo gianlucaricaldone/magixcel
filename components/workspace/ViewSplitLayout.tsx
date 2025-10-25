@@ -24,6 +24,13 @@ interface ViewSplitLayoutProps {
 }
 
 export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
+  console.log('[ViewSplitLayout] Rendering with:', {
+    viewName: view.name,
+    dataLength: data.length,
+    columnsLength: columns.length,
+    firstRow: data[0],
+  });
+
   const [charts, setCharts] = useState<ViewChart[]>([]);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
@@ -170,71 +177,27 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
       <div className="flex-1 flex overflow-hidden relative">
         {/* Data Table - Full width or with charts panel */}
         <div
-          className="flex flex-col transition-all relative"
+          className="flex-1 flex flex-col overflow-hidden"
           style={{
             width: isChartsPanelOpen ? `calc(100% - ${chartsPanelWidth}px)` : 'calc(100% - 48px)',
           }}
         >
-          {/* Header with View Name */}
-          <div className="px-4 py-3 border-b bg-white">
-            <h3 className="font-semibold text-slate-900">{view.name}</h3>
-          </div>
+        {/* Header with View Name */}
+        <div className="px-4 py-3 border-b bg-white flex-shrink-0">
+          <h3 className="font-semibold text-slate-900">{view.name}</h3>
+        </div>
 
-          {/* Toolbar */}
-          <div className="h-10 px-4 border-b bg-slate-50 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setZoomLevel(Math.max(MIN_ZOOM, zoomLevel - ZOOM_STEP))}
-                disabled={zoomLevel <= MIN_ZOOM}
-                className="h-7 w-7 p-0"
-              >
-                <ZoomOut className="h-4 w-4" />
-              </Button>
-              <span className="text-xs text-slate-600 font-medium min-w-[45px] text-center">
-                {zoomLevel}%
-              </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setZoomLevel(Math.min(MAX_ZOOM, zoomLevel + ZOOM_STEP))}
-                disabled={zoomLevel >= MAX_ZOOM}
-                className="h-7 w-7 p-0"
-              >
-                <ZoomIn className="h-4 w-4" />
-              </Button>
-              <div className="h-4 w-px bg-slate-300 mx-1" />
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setZoomLevel(100)}
-                disabled={zoomLevel === 100}
-                className="h-7 px-2 text-xs"
-              >
-                <Maximize2 className="h-3 w-3 mr-1" />
-                Fit
-              </Button>
-            </div>
-            <div className="text-xs text-slate-500">
-              {data.length} rows · {columns.length} columns
-            </div>
-          </div>
-
-          {/* Table with zoom */}
-          <div className="flex-1 overflow-auto bg-white">
-            <div
-              style={{
-                transform: `scale(${zoomLevel / 100})`,
-                transformOrigin: 'top left',
-                width: `${(100 / zoomLevel) * 100}%`,
-                height: `${(100 / zoomLevel) * 100}%`,
-              }}
-            >
-              <DataTable columns={columns} data={data} />
-            </div>
+        {/* Toolbar */}
+        <div className="h-10 px-4 border-b bg-slate-50 flex items-center justify-between flex-shrink-0">
+          <div className="text-xs text-slate-500">
+            {data.length} rows · {columns.length} columns
           </div>
         </div>
+
+        {/* Table - SAME structure as "All Data" */}
+        {console.log('[ViewSplitLayout] Rendering DataTable with:', { dataLength: data.length, columnsLength: columns.length })}
+        <DataTable columns={columns} data={data} />
+      </div>
 
         {/* Vertical Sidebar for Charts Toggle - Only when panel is closed */}
         {!isChartsPanelOpen && (

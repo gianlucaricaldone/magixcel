@@ -46,7 +46,8 @@ export function ActiveViewPanel({
   const [editedDescription, setEditedDescription] = useState(view.description || '');
   const [isSaving, setIsSaving] = useState(false);
 
-  const filterConfig = JSON.parse(view.filter_config || '{"filters": [], "combinator": "AND"}');
+  // filter_config is already deserialized by the adapter
+  const filterConfig = view.filter_config || { filters: [], combinator: 'AND' };
   const filterCount = filterConfig.filters?.length || 0;
 
   // Auto-save timers

@@ -163,12 +163,7 @@ export default function SessionPage() {
           console.error('Error restoring views from database:', error);
         }
 
-        // Fallback: auto-open "All Data" view
-        const allDataView = views.find((v) => v.is_default === 1);
-        if (allDataView) {
-          setOpenViews([allDataView]);
-          setActiveViewId(allDataView.id);
-        }
+        // No fallback needed - "All Data" tab is always visible
       }
     };
 
@@ -233,7 +228,8 @@ export default function SessionPage() {
     if (!activeView) return data;
 
     try {
-      const filterConfig = JSON.parse(activeView.filter_config);
+      // filter_config is already deserialized by the adapter
+      const filterConfig = activeView.filter_config;
       return applyFilters(data, filterConfig, '');
     } catch (error) {
       console.error('Error applying filters:', error);
@@ -349,22 +345,15 @@ export default function SessionPage() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {(() => {
-          console.log('[SessionPage] Rendering DataTable with:', {
-            'data.length': data.length,
-            'columns.length': columns.length,
-            activeView: activeView ? 'exists' : 'null'
-          });
-          return activeView ? (
-            <ViewSplitLayout
-              view={activeView}
-              data={filteredData}
-              columns={columns}
-            />
-          ) : (
-            <DataTable columns={columns} />
-          );
-        })()}
+        {activeView ? (
+          <ViewSplitLayout
+            view={activeView}
+            data={filteredData}
+            columns={columns}
+          />
+        ) : (
+          <DataTable columns={columns} data={data} />
+        )}
       </div>
 
       {/* View Sheet Tabs */}

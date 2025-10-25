@@ -374,12 +374,17 @@ export class SQLiteAdapter implements IDBAdapter {
   // ============================================================================
 
   async getView(id: string, userId: string): Promise<IView | null> {
-    // TODO: Implement when views table is ready
-    throw new Error('Views not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare('SELECT * FROM views WHERE id = ? AND user_id = ?');
+    const row = stmt.get(id, userId) as any;
+    if (!row) return null;
+    return this.deserializeView(row);
   }
 
   async getViewByPublicLink(publicLinkId: string): Promise<IView | null> {
-    throw new Error('Views not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare('SELECT * FROM views WHERE public_link_id = ? AND is_public = 1');
+    const row = stmt.get(publicLinkId) as any;
+    if (!row) return null;
+    return this.deserializeView(row);
   }
 
   async listViews(userId: string, workspaceId?: string, sessionId?: string, category?: string): Promise<IView[]> {
@@ -437,19 +442,86 @@ export class SQLiteAdapter implements IDBAdapter {
   }
 
   async createView(userId: string, data: Omit<IView, 'id' | 'user_id' | 'access_count' | 'created_at' | 'updated_at' | 'last_accessed_at'>): Promise<IView> {
-    throw new Error('Views not yet implemented in SQLite adapter');
+    const id = nanoid();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO views (
+        id, workspace_id, session_id, user_id, name, description, category,
+        filter_config, view_type, snapshot_data, is_public, public_link_id,
+        is_default, dashboard_layout, access_count, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.workspace_id,
+      data.session_id,
+      userId,
+      data.name,
+      data.description || null,
+      data.category || 'Custom',
+      JSON.stringify(data.filter_config),
+      data.view_type || 'filters_only',
+      data.snapshot_data ? JSON.stringify(data.snapshot_data) : null,
+      data.is_public ? 1 : 0,
+      data.public_link_id || null,
+      data.is_default ? 1 : 0,
+      data.dashboard_layout ? JSON.stringify(data.dashboard_layout) : null,
+      0, // access_count
+      now,
+      now
+    );
+
+    return this.getView(id, userId) as Promise<IView>;
   }
 
   async updateView(id: string, userId: string, data: Partial<Omit<IView, 'id' | 'user_id' | 'created_at'>>): Promise<IView> {
-    throw new Error('Views not yet implemented in SQLite adapter');
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    Object.entries(data).forEach(([key, value]) => {
+      if (key !== 'id' && key !== 'user_id' && key !== 'created_at') {
+        if (key === 'filter_config' || key === 'snapshot_data' || key === 'dashboard_layout') {
+          updates.push(`${key} = ?`);
+          values.push(value ? JSON.stringify(value) : null);
+        } else if (key === 'is_public' || key === 'is_default') {
+          updates.push(`${key} = ?`);
+          values.push(value ? 1 : 0);
+        } else {
+          updates.push(`${key} = ?`);
+          values.push(value);
+        }
+      }
+    });
+
+    updates.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(id);
+    values.push(userId);
+
+    const stmt = this.db.prepare(`
+      UPDATE views SET ${updates.join(', ')}
+      WHERE id = ? AND user_id = ?
+    `);
+
+    stmt.run(...values);
+
+    return this.getView(id, userId) as Promise<IView>;
   }
 
   async deleteView(id: string, userId: string): Promise<void> {
-    throw new Error('Views not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare('DELETE FROM views WHERE id = ? AND user_id = ?');
+    stmt.run(id, userId);
   }
 
   async incrementViewAccessCount(id: string): Promise<void> {
-    throw new Error('Views not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare(`
+      UPDATE views
+      SET access_count = access_count + 1, last_accessed_at = ?
+      WHERE id = ?
+    `);
+    stmt.run(new Date().toISOString(), id);
   }
 
   // ============================================================================
@@ -457,31 +529,99 @@ export class SQLiteAdapter implements IDBAdapter {
   // ============================================================================
 
   async getViewChart(id: string): Promise<IViewChart | null> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare('SELECT * FROM view_charts WHERE id = ?');
+    const row = stmt.get(id) as any;
+    if (!row) return null;
+    return this.deserializeViewChart(row);
   }
 
   async listViewCharts(viewId: string): Promise<IViewChart[]> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare(`
+      SELECT * FROM view_charts
+      WHERE view_id = ?
+      ORDER BY position ASC, created_at ASC
+    `);
+    const rows = stmt.all(viewId) as any[];
+    return rows.map(row => this.deserializeViewChart(row));
   }
 
   async createViewChart(data: Omit<IViewChart, 'id' | 'created_at' | 'updated_at'>): Promise<IViewChart> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    const id = nanoid();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO view_charts (
+        id, view_id, title, chart_type, config, size, position, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.view_id,
+      data.title,
+      data.chart_type,
+      JSON.stringify(data.config),
+      data.size || 'medium',
+      data.position || 0,
+      now,
+      now
+    );
+
+    return this.getViewChart(id) as Promise<IViewChart>;
   }
 
   async updateViewChart(id: string, data: Partial<Omit<IViewChart, 'id' | 'created_at'>>): Promise<IViewChart> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    Object.entries(data).forEach(([key, value]) => {
+      if (key !== 'id' && key !== 'created_at') {
+        if (key === 'config') {
+          updates.push(`${key} = ?`);
+          values.push(JSON.stringify(value));
+        } else {
+          updates.push(`${key} = ?`);
+          values.push(value);
+        }
+      }
+    });
+
+    updates.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE view_charts SET ${updates.join(', ')}
+      WHERE id = ?
+    `);
+
+    stmt.run(...values);
+
+    return this.getViewChart(id) as Promise<IViewChart>;
   }
 
   async deleteViewChart(id: string): Promise<void> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare('DELETE FROM view_charts WHERE id = ?');
+    stmt.run(id);
   }
 
   async reorderViewCharts(viewId: string, chartIds: string[]): Promise<void> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    // Use a transaction to update all positions atomically
+    const updateStmt = this.db.prepare('UPDATE view_charts SET position = ? WHERE id = ? AND view_id = ?');
+
+    const transaction = this.db.transaction((ids: string[]) => {
+      ids.forEach((chartId, index) => {
+        updateStmt.run(index, chartId, viewId);
+      });
+    });
+
+    transaction(chartIds);
   }
 
   async countViewCharts(viewId: string): Promise<number> {
-    throw new Error('View charts not yet implemented in SQLite adapter');
+    const stmt = this.db.prepare('SELECT COUNT(*) as count FROM view_charts WHERE view_id = ?');
+    const result = stmt.get(viewId) as any;
+    return result.count || 0;
   }
 
   // ============================================================================
@@ -663,6 +803,43 @@ export class SQLiteAdapter implements IDBAdapter {
       filter_config: row.filter_config ? JSON.parse(row.filter_config) : { filters: [], combinator: 'AND' },
       use_count: row.use_count,
       last_used_at: row.last_used_at,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    };
+  }
+
+  private deserializeView(row: any): IView {
+    return {
+      id: row.id,
+      workspace_id: row.workspace_id,
+      session_id: row.session_id,
+      user_id: row.user_id,
+      name: row.name,
+      description: row.description || undefined,
+      category: row.category,
+      filter_config: row.filter_config ? JSON.parse(row.filter_config) : {},
+      view_type: row.view_type,
+      snapshot_data: row.snapshot_data ? JSON.parse(row.snapshot_data) : undefined,
+      is_public: Boolean(row.is_public),
+      public_link_id: row.public_link_id || undefined,
+      is_default: Boolean(row.is_default),
+      dashboard_layout: row.dashboard_layout ? JSON.parse(row.dashboard_layout) : undefined,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      last_accessed_at: row.last_accessed_at || undefined,
+      access_count: row.access_count,
+    };
+  }
+
+  private deserializeViewChart(row: any): IViewChart {
+    return {
+      id: row.id,
+      view_id: row.view_id,
+      title: row.title,
+      chart_type: row.chart_type,
+      config: row.config ? JSON.parse(row.config) : {},
+      size: row.size,
+      position: row.position,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };

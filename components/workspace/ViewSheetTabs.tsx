@@ -1,12 +1,12 @@
 'use client';
 
 import { IView } from '@/types/database';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Database } from 'lucide-react';
 
 interface ViewSheetTabsProps {
   openViews: IView[];
   activeViewId: string | null;
-  onSelectView: (viewId: string) => void;
+  onSelectView: (viewId: string | null) => void; // null = All Data
   onCloseView: (viewId: string) => void;
   onAddView: () => void;
 }
@@ -18,8 +18,30 @@ export function ViewSheetTabs({
   onCloseView,
   onAddView,
 }: ViewSheetTabsProps) {
+  const isAllDataActive = activeViewId === null;
+
   return (
     <div className="h-10 bg-slate-50 border-t flex items-center px-2 gap-1 overflow-x-auto">
+      {/* All Data Tab - Always visible */}
+      <div
+        className={`
+          group relative flex items-center gap-2 px-4 py-1.5 rounded-t-lg cursor-pointer
+          transition-colors min-w-[120px] max-w-[200px]
+          ${
+            isAllDataActive
+              ? 'bg-white border-t-2 border-slate-400 text-slate-900 font-medium'
+              : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+          }
+        `}
+        onClick={() => onSelectView(null)}
+      >
+        <Database className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="flex-1 truncate text-sm">
+          All Data
+        </span>
+      </div>
+
+      {/* View Tabs */}
       {openViews.map((view) => {
         const isActive = view.id === activeViewId;
         const isFilteredView = !view.is_default; // Filtered views have is_default=0 or undefined

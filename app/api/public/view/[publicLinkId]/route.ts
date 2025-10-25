@@ -23,16 +23,12 @@ export async function GET(
     // Increment access count
     await db.incrementViewAccessCount(view.id);
 
-    // Parse filter config if it's a string
-    const filterConfig = typeof view.filter_config === 'string'
-      ? JSON.parse(view.filter_config)
-      : view.filter_config;
+    // filter_config and snapshot_data are already deserialized by the adapter
+    const filterConfig = view.filter_config;
 
     // For snapshot views, return the saved data
     if (view.view_type === 'snapshot' && view.snapshot_data) {
-      const snapshotData = Array.isArray(view.snapshot_data)
-        ? view.snapshot_data
-        : JSON.parse(JSON.stringify(view.snapshot_data));
+      const snapshotData = view.snapshot_data;
 
       return NextResponse.json({
         success: true,

@@ -41,7 +41,8 @@ export default function ViewDashboardPage() {
       // Load data based on view type
       if (loadedView.view_type === 'snapshot' && loadedView.snapshot_data) {
         // Snapshot view - data is stored in the view
-        const snapshotData = JSON.parse(loadedView.snapshot_data);
+        // snapshot_data is already deserialized by the adapter
+        const snapshotData = loadedView.snapshot_data;
         setData(snapshotData);
 
         if (snapshotData.length > 0) {
@@ -59,7 +60,8 @@ export default function ViewDashboardPage() {
         let sessionData = sessionResult.data;
 
         // Apply filters from view
-        const filterConfig = JSON.parse(loadedView.filter_config);
+        // filter_config is already deserialized by the adapter
+        const filterConfig = loadedView.filter_config;
         if (filterConfig.filters && filterConfig.filters.length > 0) {
           sessionData = applyFilters(sessionData, filterConfig.filters);
         }

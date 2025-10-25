@@ -61,7 +61,8 @@ export function ViewPickerDialog({
               <div className="grid grid-cols-1 gap-2">
                 {categoryViews.map((view) => {
                   const isOpen = openViewIds.includes(view.id);
-                  const filterConfig = JSON.parse(view.filter_config || '{"filters": []}');
+                  // filter_config is already deserialized by the adapter
+                  const filterConfig = view.filter_config || { filters: [] };
                   const filterCount = filterConfig.filters?.length || 0;
 
                   return (

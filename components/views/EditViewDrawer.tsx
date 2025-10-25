@@ -129,7 +129,8 @@ export function EditViewDrawer({
 
   if (!view) return null;
 
-  const filterConfig = JSON.parse(view.filter_config || '{"filters": [], "combinator": "AND"}');
+  // filter_config is already deserialized by the adapter
+  const filterConfig = view.filter_config || { filters: [], combinator: 'AND' };
   const filterCount = filterConfig.filters?.length || 0;
 
   return (

@@ -62,6 +62,13 @@ export function DataTable({ columns, data: propData }: DataTableProps) {
   // Use prop data if provided, otherwise use store data
   const filteredData = propData !== undefined ? propData : storeData;
 
+  console.log('[DataTable] Rendering with:', {
+    propData: propData ? `${propData.length} rows` : 'undefined',
+    storeData: `${storeData.length} rows`,
+    filteredData: `${filteredData.length} rows`,
+    columns: columns.length,
+  });
+
   const parentRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const [isMounted, setIsMounted] = useState(false);

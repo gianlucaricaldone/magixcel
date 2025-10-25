@@ -390,7 +390,8 @@ export const useFilterStore = create<FilterState>((set, get) => ({
       const result = await response.json();
 
       if (result.success) {
-        const config: IFilterConfig = JSON.parse(result.view.filter_config);
+        // filter_config is already deserialized by the adapter
+        const config: IFilterConfig = result.view.filter_config;
         const state = get();
 
         if (state.activeSheet) {
