@@ -42,6 +42,7 @@ export default function SessionPage() {
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [workspaceName, setWorkspaceName] = useState<string>('');
   const [sessionName, setSessionName] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   // New state for workspace-style UI
   const [openViews, setOpenViews] = useState<IView[]>([]);
@@ -223,19 +224,37 @@ export default function SessionPage() {
     return openViews.find((v) => v.id === activeViewId) || null;
   }, [openViews, activeViewId]);
 
-  // Filter data based on active view
-  const filteredData = useMemo(() => {
-    if (!activeView) return data;
+  // Apply global search filter
+  const searchFilteredData = useMemo(() => {
+    if (!searchQuery.trim()) return data;
 
-    try {
-      // filter_config is already deserialized by the adapter
-      const filterConfig = activeView.filter_config;
-      return applyFilters(data, filterConfig, '');
-    } catch (error) {
-      console.error('Error applying filters:', error);
-      return data;
+    const query = searchQuery.toLowerCase();
+    return data.filter((row) => {
+      // Search in all columns
+      return Object.values(row).some((value) => {
+        if (value == null) return false;
+        return String(value).toLowerCase().includes(query);
+      });
+    });
+  }, [data, searchQuery]);
+
+  // Filter data based on active view + search
+  const filteredData = useMemo(() => {
+    let result = searchFilteredData;
+
+    // Apply view filters if active
+    if (activeView) {
+      try {
+        // filter_config is already deserialized by the adapter
+        const filterConfig = activeView.filter_config;
+        result = applyFilters(result, filterConfig, '');
+      } catch (error) {
+        console.error('Error applying filters:', error);
+      }
     }
-  }, [data, activeView]);
+
+    return result;
+  }, [searchFilteredData, activeView]);
 
   // Handlers
   const handleOpenView = (view: IView) => {
@@ -323,9 +342,11 @@ export default function SessionPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col">
       {/* TopBar */}
       <TopBar
+        fileName={sessionName}
         workspaceName={workspaceName}
+        workspaceId={workspaceId}
         sessionName={sessionName}
-        onNavigateBack={() => router.push(`/app/workspace/${workspaceId}`)}
+        onSearchChange={setSearchQuery}
       />
 
       {/* Sheet Tabs (for Excel files) */}
@@ -357,7 +378,7 @@ export default function SessionPage() {
             columns={columns}
           />
         ) : (
-          <DataTable columns={columns} data={data} />
+          <DataTable columns={columns} data={filteredData} />
         )}
       </div>
 
