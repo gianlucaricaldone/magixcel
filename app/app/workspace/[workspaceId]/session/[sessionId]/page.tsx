@@ -26,7 +26,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { applyFilters } from '@/lib/processing/filter-engine';
 import { IView } from '@/types/database';
 import { ReplaceFileDialog } from '@/components/session/ReplaceFileDialog';
 
@@ -233,23 +232,9 @@ export default function SessionPage() {
     });
   }, [data, searchQuery]);
 
-  // Filter data based on active view + search
-  const filteredData = useMemo(() => {
-    let result = searchFilteredData;
-
-    // Apply view filters if active
-    if (activeView) {
-      try {
-        // filter_config is already deserialized by the adapter
-        const filterConfig = activeView.filter_config;
-        result = applyFilters(result, filterConfig, '');
-      } catch (error) {
-        console.error('Error applying filters:', error);
-      }
-    }
-
-    return result;
-  }, [searchFilteredData, activeView]);
+  // Note: When activeView is present, ViewSplitLayout applies filters internally
+  // We pass searchFilteredData (only search-filtered) to avoid double-filtering bug
+  const displayData = searchFilteredData;
 
   // Handlers
   const handleOpenView = (view: IView) => {
@@ -331,6 +316,21 @@ export default function SessionPage() {
     window.location.reload();
   };
 
+  const handleViewUpdated = async () => {
+    // Reload views to get updated filter_config
+    await loadViews(workspaceId, sessionId);
+
+    // Update openViews with refreshed data
+    if (activeViewId) {
+      const response = await fetch(`/api/views/${activeViewId}`);
+      const result = await response.json();
+
+      if (result.success && result.view) {
+        setOpenViews(openViews.map(v => v.id === activeViewId ? result.view : v));
+      }
+    }
+  };
+
   if (isLoadingSession) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -381,11 +381,12 @@ export default function SessionPage() {
         {activeView ? (
           <ViewSplitLayout
             view={activeView}
-            data={filteredData}
+            data={displayData}
             columns={columns}
+            onViewUpdated={handleViewUpdated}
           />
         ) : (
-          <DataTable columns={columns} data={filteredData} />
+          <DataTable columns={columns} data={displayData} />
         )}
       </div>
 
@@ -403,7 +404,7 @@ export default function SessionPage() {
       {/* StatusBar */}
       <div className="flex-shrink-0">
         <StatusBar
-          filteredCount={filteredData.length}
+          filteredCount={displayData.length}
           totalCount={data.length}
           isSaving={isSavingViews}
           lastSavedAt={lastSavedAt}

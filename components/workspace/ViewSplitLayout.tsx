@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { IView } from '@/types/database';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { IView, IFilterConfig } from '@/types/database';
 import { ViewChart } from '@/types/charts';
 import { DataTable } from '@/components/table/DataTable';
 import { ChartDisplay } from '@/components/charts/ChartDisplay';
 import { ChartBuilder } from '@/components/charts/ChartBuilder';
+import { ViewFilterEditor } from '@/components/views/ViewFilterEditor';
+import { applyFilters } from '@/lib/processing/filter-engine';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Plus, BarChart3, Loader2, ChevronRight, ChevronLeft, Filter } from 'lucide-react';
@@ -21,13 +23,19 @@ interface ViewSplitLayoutProps {
   view: IView;
   data: any[];
   columns: string[];
+  onViewUpdated?: () => void; // Called when view filters are saved
 }
 
-export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
+export function ViewSplitLayout({ view, data, columns, onViewUpdated }: ViewSplitLayoutProps) {
   const [charts, setCharts] = useState<ViewChart[]>([]);
   const [isLoadingCharts, setIsLoadingCharts] = useState(true);
   const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
   const [editingChart, setEditingChart] = useState<ViewChart | null>(null);
+
+  // Live filter config (changes as user edits, not saved until click "Save")
+  const [liveFilterConfig, setLiveFilterConfig] = useState<IFilterConfig>(
+    view.filter_config || { filters: [], combinator: 'AND' }
+  );
 
   // Filters panel state (left side)
   const [isFiltersPanelOpen, setIsFiltersPanelOpen] = useState(false);
@@ -40,6 +48,11 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
   const [chartsPanelWidth, setChartsPanelWidth] = useState(400); // Default width in pixels
   const [isResizingCharts, setIsResizingCharts] = useState(false);
   const resizeChartsRef = useRef<HTMLDivElement>(null);
+
+  // Reset live filter config when view changes
+  useEffect(() => {
+    setLiveFilterConfig(view.filter_config || { filters: [], combinator: 'AND' });
+  }, [view.id, view.filter_config]);
 
   // Load charts for this view
   useEffect(() => {
@@ -61,6 +74,20 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
 
     loadCharts();
   }, [view.id]);
+
+  // Apply live filters to data
+  const filteredData = useMemo(() => {
+    if (!liveFilterConfig || !liveFilterConfig.filters || liveFilterConfig.filters.length === 0) {
+      return data;
+    }
+
+    try {
+      return applyFilters(data, liveFilterConfig, '');
+    } catch (error) {
+      console.error('Error applying filters:', error);
+      return data;
+    }
+  }, [data, liveFilterConfig]);
 
   // Handle resize for Charts panel (right)
   useEffect(() => {
@@ -214,7 +241,7 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
                 <h3 className="font-semibold text-slate-900">Filters</h3>
                 <Badge variant="outline">
                   <Filter className="h-3 w-3 mr-1" />
-                  {view.filter_config?.filters?.length || 0}
+                  {liveFilterConfig.filters.length}
                 </Badge>
               </div>
               <Button
@@ -227,43 +254,26 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
               </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 min-h-0">
-              {!view.filter_config || !view.filter_config.filters || view.filter_config.filters.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <div className="text-center max-w-md">
-                    <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full mb-4">
-                      <Filter className="h-8 w-8 text-slate-400" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-slate-900 mb-2">No filters</h3>
-                    <p className="text-sm text-slate-600">
-                      This view has no filters applied
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {view.filter_config.filters.map((filter: any, index: number) => (
-                    <div key={index} className="bg-white rounded-lg border p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="font-medium text-sm text-slate-900">{filter.column}</div>
-                        <Badge variant="secondary" className="text-xs">
-                          {filter.operator}
-                        </Badge>
-                      </div>
-                      <div className="text-sm text-slate-600">
-                        {Array.isArray(filter.value) ? filter.value.join(', ') : String(filter.value)}
-                      </div>
-                    </div>
-                  ))}
-                  {view.filter_config.combinator && (
-                    <div className="text-center">
-                      <Badge variant="outline" className="text-xs">
-                        Combinator: {view.filter_config.combinator.toUpperCase()}
-                      </Badge>
-                    </div>
-                  )}
-                </div>
-              )}
+            {/* Filter Editor - Takes remaining space with its own scroll */}
+            <div className="flex-1 min-h-0">
+              <ViewFilterEditor
+                viewId={view.id}
+                initialFilterConfig={view.filter_config || { filters: [], combinator: 'AND' }}
+                columns={columns}
+                onFiltersChange={(config) => {
+                  // Update live filter config (data updates immediately)
+                  setLiveFilterConfig(config);
+                }}
+                onSaved={() => {
+                  // Notify parent to reload view data
+                  if (onViewUpdated) {
+                    onViewUpdated();
+                  } else {
+                    // Fallback: reload page if no callback provided
+                    window.location.reload();
+                  }
+                }}
+              />
             </div>
           </div>
 
@@ -287,9 +297,9 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
             title="Open Filters Panel"
           >
             <Filter className="h-5 w-5 text-slate-600" />
-            {view.filter_config?.filters?.length > 0 && (
+            {liveFilterConfig.filters.length > 0 && (
               <span className="absolute -top-1 -right-1 h-5 w-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                {view.filter_config.filters.length}
+                {liveFilterConfig.filters.length}
               </span>
             )}
           </button>
@@ -306,12 +316,14 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
         {/* Toolbar */}
         <div className="h-10 px-4 border-b bg-slate-50 flex items-center justify-between flex-shrink-0">
           <div className="text-xs text-slate-500">
-            {data.length} rows · {columns.length} columns
+            {filteredData.length} rows {filteredData.length !== data.length && (
+              <span className="text-blue-600">({data.length} total)</span>
+            )} · {columns.length} columns
           </div>
         </div>
 
         {/* Table - Takes remaining vertical space and handles its own scroll */}
-        <DataTable columns={columns} data={data} />
+        <DataTable columns={columns} data={filteredData} />
       </div>
 
       {/* Vertical Sidebar for Charts Toggle - Only when panel is closed */}
