@@ -8,7 +8,7 @@ import { ChartDisplay } from '@/components/charts/ChartDisplay';
 import { ChartBuilder } from '@/components/charts/ChartBuilder';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, BarChart3, Loader2, ChevronRight } from 'lucide-react';
+import { Plus, BarChart3, Loader2, ChevronRight, ChevronLeft, Filter } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -29,11 +29,17 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
   const [isChartBuilderOpen, setIsChartBuilderOpen] = useState(false);
   const [editingChart, setEditingChart] = useState<ViewChart | null>(null);
 
-  // Charts panel state
+  // Filters panel state (left side)
+  const [isFiltersPanelOpen, setIsFiltersPanelOpen] = useState(false);
+  const [filtersPanelWidth, setFiltersPanelWidth] = useState(350); // Default width in pixels
+  const [isResizingFilters, setIsResizingFilters] = useState(false);
+  const resizeFiltersRef = useRef<HTMLDivElement>(null);
+
+  // Charts panel state (right side)
   const [isChartsPanelOpen, setIsChartsPanelOpen] = useState(false);
   const [chartsPanelWidth, setChartsPanelWidth] = useState(400); // Default width in pixels
-  const [isResizing, setIsResizing] = useState(false);
-  const resizeRef = useRef<HTMLDivElement>(null);
+  const [isResizingCharts, setIsResizingCharts] = useState(false);
+  const resizeChartsRef = useRef<HTMLDivElement>(null);
 
   // Load charts for this view
   useEffect(() => {
@@ -56,10 +62,10 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
     loadCharts();
   }, [view.id]);
 
-  // Handle resize
+  // Handle resize for Charts panel (right)
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
+      if (!isResizingCharts) return;
 
       const newWidth = window.innerWidth - e.clientX;
       // Min width 300px, max width 80% of window
@@ -72,10 +78,10 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
+      setIsResizingCharts(false);
     };
 
-    if (isResizing) {
+    if (isResizingCharts) {
       document.addEventListener('mousemove', handleMouseMove);
       document.addEventListener('mouseup', handleMouseUp);
       document.body.style.cursor = 'col-resize';
@@ -88,7 +94,41 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isResizing]);
+  }, [isResizingCharts]);
+
+  // Handle resize for Filters panel (left)
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingFilters) return;
+
+      const newWidth = e.clientX;
+      // Min width 250px, max width 50% of window
+      const minWidth = 250;
+      const maxWidth = window.innerWidth * 0.5;
+
+      if (newWidth >= minWidth && newWidth <= maxWidth) {
+        setFiltersPanelWidth(newWidth);
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingFilters(false);
+    };
+
+    if (isResizingFilters) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isResizingFilters]);
 
   const handleSaveChart = async (chartConfig: any) => {
     try {
@@ -161,6 +201,101 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
 
   return (
     <div className="flex-1 flex overflow-hidden">
+      {/* Filters Panel - Collapsible and Resizable (LEFT) */}
+      {isFiltersPanelOpen && (
+        <>
+          {/* Filters Panel */}
+          <div
+            className="flex-shrink-0 bg-slate-50 flex flex-col overflow-hidden min-h-0"
+            style={{ width: `${filtersPanelWidth}px` }}
+          >
+            <div className="h-14 px-4 border-b bg-white flex items-center justify-between flex-shrink-0">
+              <div className="flex items-center gap-3">
+                <h3 className="font-semibold text-slate-900">Filters</h3>
+                <Badge variant="outline">
+                  <Filter className="h-3 w-3 mr-1" />
+                  {view.filter_config?.filters?.length || 0}
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsFiltersPanelOpen(false)}
+                className="h-8 w-8"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 min-h-0">
+              {!view.filter_config || !view.filter_config.filters || view.filter_config.filters.length === 0 ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center max-w-md">
+                    <div className="inline-flex items-center justify-center w-16 h-16 bg-slate-100 rounded-full mb-4">
+                      <Filter className="h-8 w-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-semibold text-slate-900 mb-2">No filters</h3>
+                    <p className="text-sm text-slate-600">
+                      This view has no filters applied
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {view.filter_config.filters.map((filter: any, index: number) => (
+                    <div key={index} className="bg-white rounded-lg border p-4">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="font-medium text-sm text-slate-900">{filter.column}</div>
+                        <Badge variant="secondary" className="text-xs">
+                          {filter.operator}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-slate-600">
+                        {Array.isArray(filter.value) ? filter.value.join(', ') : String(filter.value)}
+                      </div>
+                    </div>
+                  ))}
+                  {view.filter_config.combinator && (
+                    <div className="text-center">
+                      <Badge variant="outline" className="text-xs">
+                        Combinator: {view.filter_config.combinator.toUpperCase()}
+                      </Badge>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Resize Handle */}
+          <div
+            ref={resizeFiltersRef}
+            onMouseDown={() => setIsResizingFilters(true)}
+            className="w-1 bg-slate-200 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 relative group"
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1" />
+          </div>
+        </>
+      )}
+
+      {/* Vertical Sidebar for Filters Toggle - Only when panel is closed */}
+      {!isFiltersPanelOpen && (
+        <div className="w-12 bg-slate-100 border-r border-slate-200 flex flex-col items-center py-4 flex-shrink-0">
+          <button
+            onClick={() => setIsFiltersPanelOpen(true)}
+            className="p-2 rounded-lg hover:bg-slate-200 transition-colors group relative"
+            title="Open Filters Panel"
+          >
+            <Filter className="h-5 w-5 text-slate-600" />
+            {view.filter_config?.filters?.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 w-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                {view.filter_config.filters.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Data Table Section - Takes remaining space */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {/* Header with View Name */}
@@ -202,8 +337,8 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
         <>
           {/* Resize Handle */}
           <div
-            ref={resizeRef}
-            onMouseDown={() => setIsResizing(true)}
+            ref={resizeChartsRef}
+            onMouseDown={() => setIsResizingCharts(true)}
             className="w-1 bg-slate-200 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 relative group"
           >
             <div className="absolute inset-y-0 -left-1 -right-1" />
