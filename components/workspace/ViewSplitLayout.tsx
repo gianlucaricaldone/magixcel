@@ -160,17 +160,11 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
   };
 
   return (
-    <>
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Data Table - Full width or with charts panel */}
-        <div
-          className="flex-1 flex flex-col overflow-hidden"
-          style={{
-            width: isChartsPanelOpen ? `calc(100% - ${chartsPanelWidth}px)` : 'calc(100% - 48px)',
-          }}
-        >
+    <div className="flex-1 flex overflow-hidden">
+      {/* Data Table Section - Takes remaining space */}
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {/* Header with View Name */}
-        <div className="px-4 py-4 border-b bg-white flex-shrink-0">
+        <div className="h-14 px-4 border-b bg-white flex items-center flex-shrink-0">
           <h3 className="font-semibold text-slate-900">{view.name}</h3>
         </div>
 
@@ -181,46 +175,46 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
           </div>
         </div>
 
-        {/* Table - SAME structure as "All Data" */}
+        {/* Table - Takes remaining vertical space and handles its own scroll */}
         <DataTable columns={columns} data={data} />
       </div>
 
-        {/* Vertical Sidebar for Charts Toggle - Only when panel is closed */}
-        {!isChartsPanelOpen && (
-          <div className="w-12 bg-slate-100 border-l border-slate-200 flex flex-col items-center py-4">
-            <button
-              onClick={() => setIsChartsPanelOpen(true)}
-              className="p-2 rounded-lg hover:bg-slate-200 transition-colors group relative"
-              title="Open Charts Panel"
-            >
-              <BarChart3 className="h-5 w-5 text-slate-600" />
-              {charts.length > 0 && (
-                <span className="absolute -top-1 -right-1 h-5 w-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                  {charts.length}
-                </span>
-              )}
-            </button>
+      {/* Vertical Sidebar for Charts Toggle - Only when panel is closed */}
+      {!isChartsPanelOpen && (
+        <div className="w-12 bg-slate-100 border-l border-slate-200 flex flex-col items-center py-4 flex-shrink-0">
+          <button
+            onClick={() => setIsChartsPanelOpen(true)}
+            className="p-2 rounded-lg hover:bg-slate-200 transition-colors group relative"
+            title="Open Charts Panel"
+          >
+            <BarChart3 className="h-5 w-5 text-slate-600" />
+            {charts.length > 0 && (
+              <span className="absolute -top-1 -right-1 h-5 w-5 bg-blue-600 text-white text-xs rounded-full flex items-center justify-center font-medium">
+                {charts.length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Charts Panel - Collapsible and Resizable */}
+      {isChartsPanelOpen && (
+        <>
+          {/* Resize Handle */}
+          <div
+            ref={resizeRef}
+            onMouseDown={() => setIsResizing(true)}
+            className="w-1 bg-slate-200 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 relative group"
+          >
+            <div className="absolute inset-y-0 -left-1 -right-1" />
           </div>
-        )}
 
-        {/* Charts Panel - Collapsible and Resizable */}
-        {isChartsPanelOpen && (
-          <>
-            {/* Resize Handle */}
-            <div
-              ref={resizeRef}
-              onMouseDown={() => setIsResizing(true)}
-              className="w-1 bg-slate-200 hover:bg-blue-500 cursor-col-resize transition-colors flex-shrink-0 relative group"
-            >
-              <div className="absolute inset-y-0 -left-1 -right-1" />
-            </div>
-
-            {/* Charts Panel */}
-            <div
-              className="bg-slate-50 flex flex-col"
-              style={{ width: `${chartsPanelWidth}px` }}
-            >
-              <div className="p-4 border-b bg-white flex items-center justify-between">
+          {/* Charts Panel - Fixed width, independent scroll */}
+          <div
+            className="flex-shrink-0 bg-slate-50 flex flex-col overflow-hidden min-h-0"
+            style={{ width: `${chartsPanelWidth}px` }}
+          >
+              <div className="h-14 px-4 border-b bg-white flex items-center justify-between flex-shrink-0">
                 <div className="flex items-center gap-3">
                   <Button
                     variant="ghost"
@@ -242,7 +236,7 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
                 </Button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-4 min-h-0">
                 {isLoadingCharts ? (
                   <div className="flex items-center justify-center h-full">
                     <div className="text-center">
@@ -267,15 +261,14 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
                     </div>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-4">
+                  <div
+                    className="grid gap-4 justify-items-center"
+                    style={{
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 400px))'
+                    }}
+                  >
                     {charts.map((chart) => (
-                      <div
-                        key={chart.id}
-                        className={`
-                          bg-white rounded-lg border p-6
-                          ${chart.size === 'small' ? 'h-64' : 'h-96'}
-                        `}
-                      >
+                      <div key={chart.id} className="w-full max-w-[400px]">
                         <ChartDisplay
                           chart={chart}
                           data={data}
@@ -294,7 +287,6 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
             </div>
           </>
         )}
-      </div>
 
       {/* ChartBuilder Dialog */}
       <Dialog open={isChartBuilderOpen} onOpenChange={setIsChartBuilderOpen}>
@@ -321,6 +313,6 @@ export function ViewSplitLayout({ view, data, columns }: ViewSplitLayoutProps) {
           </div>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }

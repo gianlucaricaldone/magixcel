@@ -339,38 +339,44 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden">
       {/* TopBar */}
-      <TopBar
-        fileName={sessionName}
-        workspaceName={workspaceName}
-        workspaceId={workspaceId}
-        sessionName={sessionName}
-        onSearchChange={setSearchQuery}
-      />
+      <div className="flex-shrink-0">
+        <TopBar
+          fileName={sessionName}
+          workspaceName={workspaceName}
+          workspaceId={workspaceId}
+          sessionName={sessionName}
+          onSearchChange={setSearchQuery}
+        />
+      </div>
 
       {/* Sheet Tabs (for Excel files) */}
       {sheets && sheets.length > 1 && (
-        <SheetTabs
-          sheets={sheets}
-          activeSheet={activeSheet}
-          onSheetChange={setDataActiveSheet}
-        />
+        <div className="flex-shrink-0">
+          <SheetTabs
+            sheets={sheets}
+            activeSheet={activeSheet}
+            onSheetChange={setDataActiveSheet}
+          />
+        </div>
       )}
 
       {/* Workspace Toolbar */}
-      <WorkspaceToolbar
-        onCreateView={handleCreateView}
-        onAddView={() => setIsViewPickerOpen(true)}
-        onExport={() => console.log('Export clicked - TODO: implement')}
-        onSave={() => console.log('Save clicked - TODO: implement')}
-        onSaveAsNew={() => console.log('Save as new clicked - TODO: implement')}
-        onShare={() => console.log('Share clicked - TODO: implement')}
-        onSettings={() => console.log('Settings clicked - TODO: implement')}
-      />
+      <div className="flex-shrink-0">
+        <WorkspaceToolbar
+          onCreateView={handleCreateView}
+          onAddView={() => setIsViewPickerOpen(true)}
+          onExport={() => console.log('Export clicked - TODO: implement')}
+          onSave={() => console.log('Save clicked - TODO: implement')}
+          onSaveAsNew={() => console.log('Save as new clicked - TODO: implement')}
+          onShare={() => console.log('Share clicked - TODO: implement')}
+          onSettings={() => console.log('Settings clicked - TODO: implement')}
+        />
+      </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-h-0">
         {activeView ? (
           <ViewSplitLayout
             view={activeView}
@@ -383,19 +389,23 @@ export default function SessionPage() {
       </div>
 
       {/* View Sheet Tabs */}
-      <ViewSheetTabs
-        openViews={openViews}
-        activeViewId={activeViewId}
-        onSelectView={setActiveViewId}
-        onCloseView={handleCloseView}
-        onAddView={() => setIsViewPickerOpen(true)}
-      />
+      <div className="flex-shrink-0">
+        <ViewSheetTabs
+          openViews={openViews}
+          activeViewId={activeViewId}
+          onSelectView={setActiveViewId}
+          onCloseView={handleCloseView}
+          onAddView={() => setIsViewPickerOpen(true)}
+        />
+      </div>
 
       {/* StatusBar */}
-      <StatusBar
-        filteredCount={filteredData.length}
-        totalCount={data.length}
-      />
+      <div className="flex-shrink-0">
+        <StatusBar
+          filteredCount={filteredData.length}
+          totalCount={data.length}
+        />
+      </div>
 
       {/* View Picker Dialog */}
       <ViewPickerDialog

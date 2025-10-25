@@ -91,13 +91,16 @@ export function ChartDisplay({
 
   // Render appropriate chart type
   const renderChart = (fullscreen = false) => {
+    // For pie/doughnut charts, use 1:1 aspect ratio to keep them compact
+    const isPieChart = config.type === 'pie' || config.type === 'doughnut';
+
     const chartProps: any = {
       ref: chartRef,
       data: chartData,
       options: {
         ...chartOptions,
         maintainAspectRatio: !fullscreen,
-        aspectRatio: fullscreen ? undefined : 2,
+        aspectRatio: fullscreen ? undefined : (isPieChart ? 1 : 2),
       },
     };
 
@@ -200,7 +203,7 @@ export function ChartDisplay({
               No data available
             </div>
           ) : (
-            <div className="relative" style={{ height: chart.size === 'small' ? '200px' : '400px' }}>
+            <div className="relative" style={{ height: chart.size === 'small' ? '180px' : '280px' }}>
               {renderChart(false)}
             </div>
           )}
