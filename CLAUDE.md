@@ -80,6 +80,81 @@ Contiene linee guida fondamentali su:
 
 ---
 
+## 📝 Documentation Maintenance
+
+**IMPORTANT**: When implementing significant features or architectural changes, **ALWAYS update the relevant documentation files**:
+
+### Documentation Files to Update
+
+1. **[documentation/ARCHITECTURE.md](./documentation/ARCHITECTURE.md)**
+   - Update when: Adding new adapters, changing data flow, adding major architectural patterns
+   - Examples: New storage adapter, DuckDB integration changes, state management updates
+
+2. **[documentation/DATABASE_SCHEMA.md](./documentation/DATABASE_SCHEMA.md)**
+   - Update when: Adding/modifying tables, adding indexes, changing JSONB structures
+   - Examples: New table, new columns, foreign key changes, migrations
+
+3. **[documentation/API_ENDPOINTS.md](./documentation/API_ENDPOINTS.md)**
+   - Update when: Adding/modifying API routes, changing request/response formats
+   - Examples: New endpoint, changed parameters, new error codes
+
+4. **[documentation/UI_COMPONENTS.md](./documentation/UI_COMPONENTS.md)**
+   - Update when: Adding new UI components, changing layout structure, new patterns
+   - Examples: New panel, layout refactor, new common pattern, component prop changes
+
+5. **[documentation/CODING_STANDARDS.md](./documentation/CODING_STANDARDS.md)**
+   - Update when: Establishing new coding conventions, patterns, or best practices
+   - Examples: New naming convention, React pattern, error handling standard
+
+6. **[documentation/LIVE_FILTERING.md](./documentation/LIVE_FILTERING.md)**
+   - Update when: Changing filter implementation, filter state management
+   - Examples: New filter operators, filter persistence changes
+
+7. **[documentation/CHANGELOG.md](./documentation/CHANGELOG.md)**
+   - Update when: Completing any user-facing feature or bug fix
+   - Examples: New feature shipped, breaking change, bug fix
+
+8. **[documentation/FEATURE_ROADMAP.md](./documentation/FEATURE_ROADMAP.md)**
+   - Update when: Planning new features or marking features as completed
+   - Examples: Feature planned, feature completed (move to CHANGELOG)
+
+9. **[documentation/DEPLOYMENT_GUIDE.md](./documentation/DEPLOYMENT_GUIDE.md)**
+   - Update when: Changing deployment process, environment variables, infrastructure
+   - Examples: New env var, deployment step, production service
+
+10. **[documentation/README.md](./documentation/README.md)**
+    - Update when: Adding new documentation file or reorganizing structure
+    - Update "Recent Updates" section with date and summary
+
+### When to Update Documentation
+
+**Update IMMEDIATELY when:**
+- ✅ Adding new database tables/columns
+- ✅ Adding new API endpoints
+- ✅ Creating new UI components or layouts
+- ✅ Changing architectural patterns
+- ✅ Implementing major features
+- ✅ Making breaking changes
+
+**Guidelines:**
+- Update documentation **in the same commit** as code changes
+- Keep examples **accurate and tested**
+- Remove **obsolete information**
+- Add **cross-references** to related docs
+- Update **"Last Updated"** date in relevant files
+
+### Documentation Consolidation
+
+The documentation has been consolidated from 24+ files to **10 essential files**:
+- All duplicates removed
+- Content organized by topic
+- Cross-referenced for easy navigation
+- Index provided in `documentation/README.md`
+
+**DO NOT create new documentation files** unless absolutely necessary. Instead, add content to existing files in the appropriate section.
+
+---
+
 ## 🗂️ Project Structure
 
 ```
@@ -455,5 +530,5 @@ console.log('Current state:', {
 
 ---
 
-**Last Updated**: 2025-10-22
+**Last Updated**: 2025-10-25
 **Claude AI Context**: This file helps maintain consistency across sessions
